@@ -1,0 +1,21 @@
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/*.log
+
+# Browser test output
+**/test-results/
+**/playwright-report/
+
+# Local editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

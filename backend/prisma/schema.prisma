@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rol {
+  ENTRENADOR
+  ATLETA
+}
+
+enum TipoRutina {
+  INDIVIDUAL
+  GRUPAL
+}
+
+model Equipo {
+  id               Int       @id @default(autoincrement())
+  nombre           String    @db.VarChar(100)
+  entrenador_id    Int
+  entrenador       Usuario   @relation("EntrenadorEquipos", fields: [entrenador_id], references: [id], onDelete: Cascade)
+  atletas          Usuario[] @relation("EquipoAtletas")
+  rutinas_grupales Rutina[]  @relation("EquipoRutinas")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("equipos")
+}
+
+model Usuario {
+  id                 Int                @id @default(autoincrement())
+  nombre             String             @db.VarChar(100)
+  email              String             @unique @db.VarChar(150)
+  password_hash      String             @db.VarChar(255)
+  rol                Rol                @default(ATLETA)
+  equipo_id          Int?
+  equipo             Equipo?            @relation("EquipoAtletas", fields: [equipo_id], references: [id], onDelete: SetNull)
+  equipos_entrenados Equipo[]           @relation("EntrenadorEquipos")
+  rutinas_creadas    Rutina[]           @relation("RutinasCreadas")
+  asignaciones       AsignacionRutina[]
+  asistencias        Asistencia[]
+  series_realizadas  SerieRealizada[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@map("usuarios")
+}
+
+model Rutina {
+  id                Int                @id @default(autoincrement())
+  nombre            String             @db.VarChar(150)
+  tipo              TipoRutina         @default(INDIVIDUAL)
+  creado_por        Int
+  entrenador        Usuario            @relation("RutinasCreadas", fields: [creado_por], references: [id], onDelete: Cascade)
+  equipo_origen_id  Int?
+  equipo_origen     Equipo?            @relation("EquipoRutinas", fields: [equipo_origen_id], references: [id], onDelete: SetNull)
+  ejercicios        RutinaEjercicio[]
+  asignaciones      AsignacionRutina[]
+  series_realizadas SerieRealizada[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@map("rutinas")
+}
+
+model Ejercicio {
+  id                Int               @id @default(autoincrement())
+  nombre            String            @db.VarChar(150)
+  grupo_muscular    String            @db.VarChar(100)
+  descripcion       String            @db.Text
+  imagen_url        String            @db.VarChar(500)
+  fuente_externa_id String?           @db.VarChar(100)
+  rutina_ejercicios RutinaEjercicio[]
+  series_realizadas SerieRealizada[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("ejercicios")
+}
+
+model RutinaEjercicio {
+  id           Int       @id @default(autoincrement())
+  rutina_id    Int
+  rutina       Rutina    @relation(fields: [rutina_id], references: [id], onDelete: Cascade)
+  ejercicio_id Int
+  ejercicio    Ejercicio @relation(fields: [ejercicio_id], references: [id], onDelete: Cascade)
+  series       Int
+  repeticiones Int
+  orden        Int
+
+  @@unique([rutina_id, ejercicio_id])
+  @@map("rutina_ejercicios")
+}
+
+model AsignacionRutina {
+  id               Int      @id @default(autoincrement())
+  rutina_id        Int
+  rutina           Rutina   @relation(fields: [rutina_id], references: [id], onDelete: Cascade)
+  usuario_id       Int
+  usuario          Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  fecha_asignacion DateTime @default(now())
+
+  @@unique([rutina_id, usuario_id])
+  @@map("asignaciones_rutina")
+}
+
+model Asistencia {
+  id         Int      @id @default(autoincrement())
+  usuario_id Int
+  usuario    Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  fecha      DateTime @db.Date
+  presente   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([usuario_id, fecha])
+  @@map("asistencias")
+}
+
+model SerieRealizada {
+  id                      Int       @id @default(autoincrement())
+  usuario_id              Int
+  usuario                 Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  ejercicio_id            Int
+  ejercicio               Ejercicio @relation(fields: [ejercicio_id], references: [id], onDelete: Cascade)
+  rutina_id               Int
+  rutina                  Rutina    @relation(fields: [rutina_id], references: [id], onDelete: Cascade)
+  numero_serie            Int
+  peso_kg                 Decimal   @db.Decimal(6, 2)
+  repeticiones_realizadas Int
+  fecha                   DateTime  @default(now())
+
+  @@map("series_realizadas")
+}
