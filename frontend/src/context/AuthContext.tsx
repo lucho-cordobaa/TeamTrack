@@ -18,17 +18,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Usuario | null>(() => {
-    const saved = localStorage.getItem('teamtrack_user');
+    const saved = sessionStorage.getItem('teamtrack_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('teamtrack_token'));
+  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('teamtrack_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const refreshUser = async () => {
     try {
       const res = await api.get('/auth/me');
       setUser(res.data);
-      localStorage.setItem('teamtrack_user', JSON.stringify(res.data));
+      sessionStorage.setItem('teamtrack_user', JSON.stringify(res.data));
     } catch {
       logout();
     }
@@ -47,8 +47,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: userData, token: jwtToken } = res.data;
     setUser(userData);
     setToken(jwtToken);
-    localStorage.setItem('teamtrack_token', jwtToken);
-    localStorage.setItem('teamtrack_user', JSON.stringify(userData));
+    sessionStorage.setItem('teamtrack_token', jwtToken);
+    sessionStorage.setItem('teamtrack_user', JSON.stringify(userData));
     return userData;
   };
 
@@ -57,16 +57,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user: userData, token: jwtToken } = res.data;
     setUser(userData);
     setToken(jwtToken);
-    localStorage.setItem('teamtrack_token', jwtToken);
-    localStorage.setItem('teamtrack_user', JSON.stringify(userData));
+    sessionStorage.setItem('teamtrack_token', jwtToken);
+    sessionStorage.setItem('teamtrack_user', JSON.stringify(userData));
     return userData;
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('teamtrack_token');
-    localStorage.removeItem('teamtrack_user');
+    sessionStorage.removeItem('teamtrack_token');
+    sessionStorage.removeItem('teamtrack_user');
   };
 
   const isCoach = user?.rol === 'ENTRENADOR';

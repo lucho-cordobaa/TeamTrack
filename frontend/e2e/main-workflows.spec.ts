@@ -48,7 +48,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     const routineForm = page.locator('form');
     await routineForm.locator('select').nth(0).selectOption('GRUPAL');
     await routineForm.locator('select').nth(1).selectOption({ index: 1 });
-    await page.locator('#exercisePicker').selectOption({ index: 1 });
+    await routineForm.getByTestId('exercise-option').first().click();
     await expect(routineForm.locator('input[type="number"]')).toHaveCount(2);
     await routineForm.locator('input[type="number"]').nth(0).fill('1');
     await routineForm.locator('input[type="number"]').nth(1).fill('5');
@@ -61,7 +61,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     await expect(page.getByRole('heading', { name: routineName, exact: true })).toBeVisible();
 
     await register(concurrentAthletePage, 'Atleta Concurrencia E2E', 'teamtrack-e2e-concurrency@teamtrack.test', 'Atleta');
-    const coachToken = await page.evaluate(() => localStorage.getItem('teamtrack_token'));
+    const coachToken = await page.evaluate(() => sessionStorage.getItem('teamtrack_token'));
     const coachHeaders = { Authorization: `Bearer ${coachToken}` };
     const teamResponse = await request.get('http://127.0.0.1:3000/api/teams', { headers: coachHeaders });
     const [team] = await teamResponse.json();
@@ -82,7 +82,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
       data: { atleta_ids: [concurrentAthlete.id] },
     })).ok()).toBeTruthy();
 
-    const concurrentAthleteToken = await concurrentAthletePage.evaluate(() => localStorage.getItem('teamtrack_token'));
+    const concurrentAthleteToken = await concurrentAthletePage.evaluate(() => sessionStorage.getItem('teamtrack_token'));
     const concurrentAthleteHeaders = { Authorization: `Bearer ${concurrentAthleteToken}` };
     const [firstConcurrentStart, secondConcurrentStart] = await Promise.all([
       request.post('http://127.0.0.1:3000/api/sessions/start', {
@@ -121,7 +121,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     await athletePage.getByRole('button', { name: 'Completar' }).click();
     await expect(athletePage.getByText(/1 de 1 series/)).toBeVisible();
 
-    const athleteToken = await athletePage.evaluate(() => localStorage.getItem('teamtrack_token'));
+    const athleteToken = await athletePage.evaluate(() => sessionStorage.getItem('teamtrack_token'));
     const athleteHeaders = { Authorization: `Bearer ${athleteToken}` };
     const [firstStart, simultaneousStart] = await Promise.all([
       request.post('http://127.0.0.1:3000/api/sessions/start', {

@@ -17,6 +17,7 @@ export const CoachDashboard: React.FC<CoachDashboardProps> = ({ onNavigate }) =>
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshingLive, setIsRefreshingLive] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     try {
@@ -44,8 +45,14 @@ export const CoachDashboard: React.FC<CoachDashboardProps> = ({ onNavigate }) =>
       setIsRefreshingLive(true);
       const res = await api.get(`/sessions/team/${teamId}/live`);
       setActiveSessions(res.data);
-    } catch (err) {
+      setLiveError(null);
+    } catch (err: any) {
       console.error('Error fetching live sessions:', err);
+      setLiveError(
+        err.response?.status === 403
+          ? 'Tu sesión ya no tiene permisos de entrenador. Cerrá sesión y volvé a ingresar como entrenador.'
+          : err.response?.data?.message || 'No se pudo actualizar el monitoreo en vivo. Reintentando...',
+      );
     } finally {
       setIsRefreshingLive(false);
     }
@@ -173,6 +180,12 @@ export const CoachDashboard: React.FC<CoachDashboardProps> = ({ onNavigate }) =>
             </button>
           </div>
         </div>
+
+        {liveError && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
+            {liveError}
+          </div>
+        )}
 
         {/* Live sessions cards */}
         {activeSessions.length === 0 ? (

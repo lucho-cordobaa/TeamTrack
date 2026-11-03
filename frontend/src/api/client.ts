@@ -8,7 +8,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('teamtrack_token');
+  const token = sessionStorage.getItem('teamtrack_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -19,8 +19,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('teamtrack_token');
-      localStorage.removeItem('teamtrack_user');
+      sessionStorage.removeItem('teamtrack_token');
+      sessionStorage.removeItem('teamtrack_user');
       if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
         window.location.href = '/';
       }

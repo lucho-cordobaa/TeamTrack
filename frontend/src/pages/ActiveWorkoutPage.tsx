@@ -127,31 +127,31 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
   ) => {
     if (!activeSession) return;
 
-    // Actualización optimista inmediata en UI
-    const updatedEjercicios = activeSession.ejercicios.map((ej) => {
-      if (ej.ejercicio_id === ejercicioId) {
-        return {
-          ...ej,
-          series: ej.series.map((s) => {
-            if (s.numero === numeroSerie) {
-              return {
-                ...s,
-                peso_kg: Math.max(0, pesoKg),
-                repeticiones_realizadas: Math.max(0, reps),
-                completada,
-              };
-            }
-            return s;
-          }),
-        };
-      }
-      return ej;
-    });
-
-    setActiveSession({
-      ...activeSession,
-      ejercicios: updatedEjercicios,
-    });
+    // Actualización optimista inmediata en UI (sobre el estado más reciente)
+    setActiveSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            ejercicios: prev.ejercicios.map((ej) =>
+              ej.ejercicio_id === ejercicioId
+                ? {
+                    ...ej,
+                    series: ej.series.map((s) =>
+                      s.numero === numeroSerie
+                        ? {
+                            ...s,
+                            peso_kg: Math.max(0, pesoKg),
+                            repeticiones_realizadas: Math.max(0, reps),
+                            completada,
+                          }
+                        : s,
+                    ),
+                  }
+                : ej,
+            ),
+          }
+        : prev,
+    );
 
     // Enviar a backend / Firestore en tiempo real (RF-13)
     try {

@@ -13,6 +13,7 @@ import {
   LineChart as ChartIcon,
 } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
+import { ExercisePicker } from '../components/ui/ExercisePicker';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -280,21 +281,20 @@ export const ProgressPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <label className="text-xs font-semibold text-slate-400">Ejercicio:</label>
-            <select
-              value={selectedExerciseId}
-              onChange={(e) => setSelectedExerciseId(Number(e.target.value))}
-              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-500 max-w-xs"
-            >
-              {exercises.map((ej) => (
-                <option key={ej.id} value={ej.id}>
-                  {ej.nombre} ({ej.grupo_muscular})
-                </option>
-              ))}
-            </select>
+          <div className="text-xs text-slate-400">
+            Ejercicio:{' '}
+            <span className="font-bold text-emerald-400">
+              {exercises.find((ej) => ej.id === selectedExerciseId)?.nombre || '—'}
+            </span>
           </div>
         </div>
+
+        <ExercisePicker
+          exercises={exercises}
+          selectedIds={selectedExerciseId ? [selectedExerciseId] : []}
+          onSelect={(ej) => setSelectedExerciseId(ej.id)}
+          maxHeightClass="max-h-40"
+        />
 
         {/* Chart Canvas */}
         <div className="h-72 w-full pt-2">

@@ -5,6 +5,7 @@ import { Rutina, Ejercicio, Equipo, Usuario, TipoRutina } from '../types';
 import { FileText, Plus, Trash2, UserPlus, Play, Check, ChevronDown, Dumbbell, Users } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
+import { ExercisePicker } from '../components/ui/ExercisePicker';
 
 interface RoutinesPageProps {
   onStartWorkout: (routineId: number) => void;
@@ -403,33 +404,17 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
               Agregar Ejercicios del Catálogo
             </label>
 
-            <div className="flex gap-2">
-              <select
-                id="exercisePicker"
-                className="flex-1 bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                defaultValue=""
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleAddExerciseToRoutine(Number(e.target.value));
-                    e.target.value = '';
-                  }
-                }}
-              >
-                <option value="" disabled>
-                  -- Selecciona un ejercicio para agregarlo a la lista --
-                </option>
-                {exercisesCatalog.map((ej) => (
-                  <option key={ej.id} value={ej.id}>
-                    {ej.nombre} ({ej.grupo_muscular})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ExercisePicker
+              exercises={exercisesCatalog}
+              selectedIds={selectedExercises.map((e) => e.ejercicio_id)}
+              onSelect={(ej) => handleAddExerciseToRoutine(ej.id)}
+              maxHeightClass="max-h-48"
+            />
 
             {/* List of configured exercises */}
             {selectedExercises.length === 0 ? (
               <p className="text-xs text-slate-500 italic py-4 text-center border border-dashed border-slate-800 rounded-xl">
-                Aún no agregaste ejercicios. Selecciona uno en el menú superior.
+                Aún no agregaste ejercicios. Buscá uno en la lista superior y hacé click para agregarlo.
               </p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
