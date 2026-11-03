@@ -1,18 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-
-interface FreeExercise {
-  id: string;
-  name: string;
-  primaryMuscles: string[];
-  instructions: string[];
-  images: string[];
-  name_es: string;
-  primaryMuscles_es: string[];
-  instructions_es?: string;
-}
+import { loadExerciseDataset, toExerciseData } from '../src/modules/exercises/exercise-dataset';
 
 const prisma = new PrismaClient();
-const dataset = require('./datasets/free-exercise-db.json') as FreeExercise[];
+const dataset = loadExerciseDataset();
 const legacyExerciseTargets: Record<string, string> = {
   exdb_bench_press_01: 'Barbell_Bench_Press_-_Medium_Grip',
   exdb_squat_02: 'Barbell_Squat',
@@ -31,22 +21,6 @@ const legacyExerciseTargets: Record<string, string> = {
   exdb_plank_15: 'Plank',
   exdb_lat_pulldown_16: 'Wide-Grip_Lat_Pulldown',
 };
-
-function toExerciseData(exercise: FreeExercise) {
-  return {
-    nombre: exercise.name_es || exercise.name,
-    grupo_muscular: (exercise.primaryMuscles_es?.length
-      ? exercise.primaryMuscles_es
-      : exercise.primaryMuscles
-    ).join(', '),
-    descripcion:
-      exercise.instructions_es || exercise.instructions.join('\n') || 'Sin instrucciones disponibles.',
-    imagen_url: exercise.images[0]
-      ? `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${exercise.images[0]}`
-      : '',
-    fuente_externa_id: exercise.id,
-  };
-}
 
 async function main() {
   const datasetIds = dataset.map((exercise) => exercise.id);

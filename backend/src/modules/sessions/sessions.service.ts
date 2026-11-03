@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FirebaseService, SesionFirestore } from '../../firebase/firebase.service';
+import { assignedToAthlete } from '../routines/routine-access';
 import { StartSessionDto } from './dto/start-session.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { FinishSessionDto } from './dto/finish-session.dto';
@@ -21,7 +22,7 @@ export class SessionsService {
     private firebaseService: FirebaseService,
   ) {}
 
-  // RF-12, RB-06: Iniciar sesión de entrenamiento en tiempo real
+  // Iniciar sesión de entrenamiento en tiempo real
   async start(athleteId: number, dto: StartSessionDto): Promise<SesionFirestore> {
     const previousStart = this.sessionStartLocks.get(athleteId);
     let releaseLock!: () => void;
@@ -42,11 +43,11 @@ export class SessionsService {
   }
 
   private async startExclusive(athleteId: number, dto: StartSessionDto): Promise<SesionFirestore> {
-    // RB-06: Un Atleta no puede tener dos sesiones activas a la vez
+    // Un Atleta no puede tener dos sesiones activas a la vez
     const active = await this.firebaseService.getActiveSessionForAthlete(athleteId);
     if (active) {
       throw new ConflictException(
-        'Ya tienes una sesión de entrenamiento activa en curso. Finalízala antes de iniciar otra (RB-06).',
+        'Ya tienes una sesión de entrenamiento activa en curso. Finalízala antes de iniciar otra.',
       );
     }
 
@@ -57,30 +58,20 @@ export class SessionsService {
     if (!athlete) throw new NotFoundException('Atleta no encontrado');
 
     // Verificar que la rutina esté asignada
-    const assignment = await this.prisma.asignacionRutina.findUnique({
-      where: {
-        rutina_id_usuario_id: {
-          rutina_id: dto.rutina_id,
-          usuario_id: athleteId,
-        },
-      },
+    const rutina = await this.prisma.rutina.findFirst({
+      where: { id: dto.rutina_id, ...assignedToAthlete(athleteId, athlete.equipo_id) },
       include: {
-        rutina: {
-          include: {
-            ejercicios: {
-              include: { ejercicio: true },
-              orderBy: { orden: 'asc' },
-            },
-          },
+        ejercicios: {
+          include: { ejercicio: true },
+          orderBy: { orden: 'asc' },
         },
       },
     });
 
-    if (!assignment) {
+    if (!rutina) {
       throw new ForbiddenException('Esta rutina no está asignada a tu usuario');
     }
 
-    const rutina = assignment.rutina;
     const sessionId = randomUUID();
 
     const sessionDoc: SesionFirestore = {
@@ -120,7 +111,7 @@ export class SessionsService {
     return this.firebaseService.getActiveSessionForAthlete(athleteId);
   }
 
-  // RF-13: Registro en tiempo real del peso levantado y reps en cada serie
+  // Registro en tiempo real del peso levantado y reps en cada serie
   async updateSet(athleteId: number, sessionId: string, dto: UpdateSetDto): Promise<SesionFirestore> {
     const session = await this.firebaseService.getSessionById(sessionId);
     if (!session) throw new NotFoundException('Sesión no encontrada');
@@ -165,7 +156,7 @@ export class SessionsService {
     return updated!;
   }
 
-  // RF-14, RB-08, RB-09: Finalizar sesión y persistir datos en MySQL
+  // Finalizar sesión y persistir datos en MySQL
   async finish(athleteId: number, sessionId: string, dto?: FinishSessionDto) {
     const session = await this.firebaseService.getSessionById(sessionId);
     if (!session) throw new NotFoundException('Sesión no encontrada');
@@ -255,20 +246,20 @@ export class SessionsService {
       }
     });
 
-    // Actualizar estado en Firestore a 'finalizada' (RB-09)
+    // Actualizar estado en Firestore a 'finalizada'
     await this.firebaseService.updateSession(sessionId, {
       estado: 'finalizada',
       fecha_fin: now.toISOString(),
     });
 
     return {
-      message: 'Sesión finalizada y series persistidas con éxito en MySQL.',
+      message: 'Sesión finalizada con éxito.',
       series_guardadas: seriesToPersist.length,
       sessionId,
     };
   }
 
-  // RF-15: Monitoreo en tiempo real de sesiones activas del equipo para el entrenador
+  // Monitoreo en tiempo real de sesiones activas del equipo para el entrenador
   async getActiveTeamSessions(coachId: number, teamId: number): Promise<SesionFirestore[]> {
     const team = await this.prisma.equipo.findUnique({
       where: { id: teamId },

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
+import { todayKey } from '../utils/week';
 import { useAuth } from '../context/AuthContext';
 import { Rutina, SesionEntrenamiento } from '../types';
 import { Play, CheckCircle2, CalendarCheck, Dumbbell, ArrowRight, Trophy } from 'lucide-react';
@@ -33,7 +34,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({ onNavigate }
       setTotalAttendances(attendanceRes.data.total_asistencias || 0);
       setActiveSession(sessionRes.data);
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = todayKey();
       const attendedToday = attendanceRes.data.historial?.some((h: any) => {
         const d = new Date(h.fecha).toISOString().split('T')[0];
         return d === todayStr && h.presente;
@@ -54,7 +55,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({ onNavigate }
     if (!user) return;
     try {
       setMarkingAttendance(true);
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = todayKey();
       await api.post('/attendance', {
         usuario_id: user.id,
         fecha: todayStr,
@@ -95,7 +96,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({ onNavigate }
         </div>
       </div>
 
-      {/* ACTIVE WORKOUT NOTIFICATION IF IN PROGRESS (RB-06) */}
+      {/* ACTIVE WORKOUT NOTIFICATION IF IN PROGRESS */}
       {activeSession && (
         <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-3">
@@ -187,7 +188,7 @@ export const AthleteDashboard: React.FC<AthleteDashboardProps> = ({ onNavigate }
         </div>
       </div>
 
-      {/* ASSIGNED ROUTINES SECTION (RF-05, RF-09, RF-12) */}
+      {/* ASSIGNED ROUTINES SECTION */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>

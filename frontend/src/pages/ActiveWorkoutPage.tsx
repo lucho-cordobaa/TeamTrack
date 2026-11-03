@@ -51,7 +51,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
       setLoading(true);
       setError(null);
 
-      // 1. Verificar si el atleta ya tiene una sesión activa (RB-06)
+      // 1. Verificar si el atleta ya tiene una sesión activa
       const activeRes = await api.get('/sessions/active').catch(() => ({ data: null }));
       if (activeRes.data && activeRes.data.estado === 'en_curso') {
         setActiveSession(activeRes.data);
@@ -93,7 +93,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
     };
   }, [activeSession]);
 
-  // RF-12, RB-06: Iniciar Sesión de Entrenamiento en tiempo real
+  // Iniciar Sesión de Entrenamiento en tiempo real
   const handleStartSession = async () => {
     if (!selectedRoutineId) {
       setError('Por favor selecciona una rutina para iniciar');
@@ -110,14 +110,14 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          'No se pudo iniciar el entrenamiento. Verifica si ya tienes una sesión activa (RB-06).',
+          'No se pudo iniciar el entrenamiento. Verifica si ya tienes una sesión activa.',
       );
     } finally {
       setActionLoading(false);
     }
   };
 
-  // RF-13: Actualizar serie en tiempo real (peso y repeticiones)
+  // Actualizar serie en tiempo real (peso y repeticiones)
   const handleUpdateSet = async (
     ejercicioId: number,
     numeroSerie: number,
@@ -153,7 +153,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
         : prev,
     );
 
-    // Enviar a backend / Firestore en tiempo real (RF-13)
+    // Enviar a backend / Firestore en tiempo real
     try {
       await api.patch(`/sessions/${activeSession.id}/set`, {
         ejercicio_id: ejercicioId,
@@ -167,7 +167,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
     }
   };
 
-  // RF-14, RB-08, RB-09: Finalizar sesión y persistir en MySQL
+  // Finalizar sesión y persistir en MySQL
   const handleConfirmFinishSession = async () => {
     if (!activeSession) return;
 
@@ -230,7 +230,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
         <div>
           <h2 className="text-2xl font-black text-white">¡Entrenamiento Completado!</h2>
           <p className="text-slate-400 text-sm mt-1">
-            {finishSuccess.message} Se guardaron {finishSuccess.series_guardadas} series en MySQL y la sesión de Firestore pasó a estado finalizada (RB-09).
+            {finishSuccess.message} Se guardaron {finishSuccess.series_guardadas} series.
           </p>
         </div>
 
@@ -257,7 +257,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">Iniciar Sesión de Entrenamiento</h1>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-            Selecciona una de tus rutinas asignadas. El cronómetro y la sincronización con Firestore se activarán de inmediato.
+            Selecciona una de tus rutinas asignadas. El cronómetro se activará de inmediato.
           </p>
         </div>
 
@@ -324,7 +324,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
               className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 transition disabled:opacity-50"
             >
               <Play size={18} />
-              <span>{actionLoading ? 'Iniciando en Firestore...' : '¡Comenzar a Entrenar Ahora!'}</span>
+              <span>{actionLoading ? 'Iniciando...' : '¡Comenzar a Entrenar Ahora!'}</span>
             </button>
           </div>
         )}
@@ -332,7 +332,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
     );
   }
 
-  // PANTALLA: ENTRENAMIENTO ACTIVO EN TIEMPO REAL (RF-13, RF-14, RNF-02)
+  // PANTALLA: ENTRENAMIENTO ACTIVO EN TIEMPO REAL
   const totalSets = activeSession.ejercicios.reduce((acc, ej) => acc + ej.series.length, 0);
   const completedSets = activeSession.ejercicios.reduce(
     (acc, ej) => acc + ej.series.filter((s) => s.completada).length,
@@ -347,7 +347,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
             <span className="text-[11px] font-mono uppercase tracking-widest text-emerald-400 font-bold">
-              En Vivo (Firestore)
+              En Vivo
             </span>
           </div>
           <h2 className="text-base font-black text-white truncate">{activeSession.rutina_nombre}</h2>
@@ -572,8 +572,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-300">
-            Al finalizar, todas las series completadas se guardarán de forma permanente en la base de datos MySQL (
-            <code className="text-emerald-400">SerieRealizada</code>), asegurando tu asistencia del día y actualizando el documento en Firestore a estado <span className="text-emerald-400 font-bold">finalizada</span>.
+            Al finalizar, se guardarán todas las series completadas y se registrará tu asistencia del día.
           </p>
 
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
@@ -603,7 +602,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
               disabled={actionLoading}
               className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
             >
-              {actionLoading ? 'Guardando en MySQL...' : 'Confirmar y Guardar'}
+              {actionLoading ? 'Guardando...' : 'Confirmar y Guardar'}
             </button>
           </div>
         </div>

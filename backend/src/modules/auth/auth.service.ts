@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ExercisesService } from '../exercises/exercises.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
@@ -11,6 +12,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private exercisesService: ExercisesService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -40,6 +42,8 @@ export class AuthService {
       },
     });
 
+    await this.exercisesService.restoreDataset();
+
     const token = this.generateToken(user.id, user.email, user.rol);
     const { password_hash: _, ...safeUser } = user;
 
@@ -66,6 +70,8 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    await this.exercisesService.restoreDataset();
+
     const token = this.generateToken(user.id, user.email, user.rol);
     const { password_hash: _, ...safeUser } = user;
 
@@ -85,6 +91,8 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
     }
+    await this.exercisesService.restoreDataset();
+
     const { password_hash: _, ...safeUser } = user;
     return safeUser;
   }

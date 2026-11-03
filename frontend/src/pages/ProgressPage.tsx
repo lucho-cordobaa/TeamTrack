@@ -243,7 +243,7 @@ export const ProgressPage: React.FC = () => {
             <h3 className="text-2xl font-black text-white mt-1">
               {athleteSummary?.total_series_registradas || 0}
             </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">Persistidas en MySQL</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Acumuladas en entrenamientos</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
             <Dumbbell size={24} />
@@ -266,7 +266,7 @@ export const ProgressPage: React.FC = () => {
         </div>
       </div>
 
-      {/* RF-15, RF-17: EVOLUTION CHART BY EXERCISE */}
+      {/* EVOLUTION CHART BY EXERCISE */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <div>

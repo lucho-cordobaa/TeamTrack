@@ -1,12 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { coachManagesAthlete } from '../../common/utils/athlete-access';
 import { Rol } from '@prisma/client';
 
 @Injectable()
 export class ProgressService {
   constructor(private prisma: PrismaService) {}
 
-  // RF-15, RF-17: Historial de peso por ejercicio a lo largo del tiempo
+  // Historial de peso por ejercicio a lo largo del tiempo
   async getExerciseWeightHistory(
     athleteId: number,
     exerciseId: number,
@@ -22,7 +23,7 @@ export class ProgressService {
     });
     if (!athlete) throw new NotFoundException('Atleta no encontrado');
 
-    if (user.rol === Rol.ENTRENADOR && athlete.equipo?.entrenador_id !== user.id) {
+    if (user.rol === Rol.ENTRENADOR && !coachManagesAthlete(user.id, athlete)) {
       throw new ForbiddenException('No administras al equipo de este atleta');
     }
 

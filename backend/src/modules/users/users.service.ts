@@ -6,9 +6,13 @@ import { Rol } from '@prisma/client';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAllAthletes() {
+  // Atletas que el entrenador puede gestionar: los de sus equipos y los que aún no tienen equipo
+  async findAllAthletes(coachId: number) {
     return this.prisma.usuario.findMany({
-      where: { rol: Rol.ATLETA },
+      where: {
+        rol: Rol.ATLETA,
+        OR: [{ equipo_id: null }, { equipo: { entrenador_id: coachId } }],
+      },
       select: {
         id: true,
         nombre: true,

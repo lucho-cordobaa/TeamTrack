@@ -45,4 +45,9 @@ export class CreateRoutineDto {
   @ValidateNested({ each: true })
   @Type(() => RoutineExerciseDto)
   ejercicios: RoutineExerciseDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  atleta_ids?: number[];
 }

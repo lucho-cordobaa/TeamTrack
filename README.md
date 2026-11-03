@@ -87,6 +87,10 @@ La base de datos incluye datos realistas listos para probar:
    ```bash
    npx prisma db push
    ```
+   Si ya tenias datos cargados, convierte tambien las rutinas grupales existentes:
+   ```bash
+   npm run prisma:migrate-team-assignments
+   ```
 5. Carga los datos de prueba iniciales:
    ```bash
    npx ts-node prisma/seed.ts

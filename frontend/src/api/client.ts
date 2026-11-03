@@ -29,4 +29,8 @@ api.interceptors.response.use(
   },
 );
 
+// Las imágenes subidas se guardan con una ruta relativa al servidor de la API
+export const resolveImageUrl = (url: string) =>
+  url.startsWith('/') ? `${new URL(api.defaults.baseURL!, window.location.origin).origin}${url}` : url;
+
 export default api;

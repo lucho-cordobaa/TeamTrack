@@ -9,11 +9,12 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "test": "node --test --require ts-node/register test/dataset.spec.ts test/exercises.service.spec.ts test/routines.service.spec.ts",
+    "test": "node --test --require ts-node/register test/dataset.spec.ts test/exercises.service.spec.ts test/routines.service.spec.ts test/attendance.service.spec.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:sync-exercises": "ts-node prisma/sync-exercises.ts",
+    "prisma:migrate-team-assignments": "ts-node prisma/migrate-team-assignments.ts",
     "prisma:e2e-cleanup": "ts-node prisma/e2e-cleanup.ts"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "@nestjs/schematics": "^10.2.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.3.0",
     "@types/node": "^22.13.9",
     "@types/passport-jwt": "^4.0.1",
     "prisma": "^6.4.1",

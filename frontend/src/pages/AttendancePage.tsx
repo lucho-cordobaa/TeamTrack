@@ -1,28 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Equipo, Asistencia, Usuario } from '../types';
-import { CalendarCheck, CheckCircle2, XCircle, Plus, Users, Calendar } from 'lucide-react';
-import { Badge } from '../components/ui/Badge';
+import { AsistenciaSemanal, Equipo, Usuario } from '../types';
+import { addDays, formatDayLabel, formatWeekRange, mondayOf, todayKey, weekDays } from '../utils/week';
+import { CheckCircle2, ChevronLeft, ChevronRight, XCircle, Plus, Users, Calendar, Minus } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
+
+const SIN_EQUIPO = 'sin-equipo';
+
+const formatDaysCount = (days: number) => `${days} ${days === 1 ? 'día' : 'días'}`;
 
 export const AttendancePage: React.FC = () => {
   const { user, isCoach, isAthlete } = useAuth();
   const [teams, setTeams] = useState<Equipo[]>([]);
-  const [selectedTeamId, setSelectedTeamId] = useState<number | ''>('');
-  const [teamHistory, setTeamHistory] = useState<any>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | typeof SIN_EQUIPO | ''>('');
+  const [weekStart, setWeekStart] = useState<string>(mondayOf(todayKey()));
+  const [weekData, setWeekData] = useState<AsistenciaSemanal | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
   const [athleteHistory, setAthleteHistory] = useState<any>(null);
   const [athletesList, setAthletesList] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal: Registrar Asistencia (RF-10, RB-07)
+  // Modal: Registrar Asistencia
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const [selectedAthleteId, setSelectedAthleteId] = useState<number | ''>('');
-  const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState<string>(todayKey());
   const [presente, setPresente] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const currentWeek = mondayOf(todayKey());
 
   const fetchInitialData = async () => {
     try {
@@ -34,10 +42,7 @@ export const AttendancePage: React.FC = () => {
         ]);
         setTeams(teamsRes.data);
         setAthletesList(athletesRes.data);
-        if (teamsRes.data.length > 0) {
-          setSelectedTeamId(teamsRes.data[0].id);
-          fetchTeamAttendance(teamsRes.data[0].id);
-        }
+        setSelectedTeamId(teamsRes.data.length > 0 ? teamsRes.data[0].id : SIN_EQUIPO);
       } else if (isAthlete && user) {
         fetchAthleteAttendance(user.id);
       }
@@ -45,15 +50,6 @@ export const AttendancePage: React.FC = () => {
       console.error('Error cargando asistencias:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchTeamAttendance = async (teamId: number) => {
-    try {
-      const res = await api.get(`/attendance/team/${teamId}`);
-      setTeamHistory(res.data);
-    } catch (err) {
-      console.error('Error cargando historial de equipo:', err);
     }
   };
 
@@ -69,6 +65,22 @@ export const AttendancePage: React.FC = () => {
   useEffect(() => {
     fetchInitialData();
   }, [isCoach, isAthlete, user]);
+
+  useEffect(() => {
+    if (!isCoach || !selectedTeamId) return;
+
+    let isCurrent = true;
+    api
+      .get('/attendance/week', { params: { date: weekStart, team: selectedTeamId } })
+      .then((res) => {
+        if (isCurrent) setWeekData(res.data);
+      })
+      .catch((err) => console.error('Error cargando asistencia semanal:', err));
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [isCoach, selectedTeamId, weekStart, refreshCount]);
 
   const handleRecordAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,8 +99,12 @@ export const AttendancePage: React.FC = () => {
       setSuccessMsg('¡Asistencia registrada exitosamente!');
       setIsRecordOpen(false);
 
-      if (isCoach && selectedTeamId) {
-        fetchTeamAttendance(Number(selectedTeamId));
+      if (isCoach) {
+        // Mostrar la semana y el grupo donde quedó el registro
+        const athlete = athletesList.find((a) => a.id === targetId);
+        setSelectedTeamId(athlete?.equipo_id ?? SIN_EQUIPO);
+        setWeekStart(mondayOf(fecha));
+        setRefreshCount((count) => count + 1);
       } else if (isAthlete && user) {
         fetchAthleteAttendance(user.id);
       }
@@ -99,6 +115,57 @@ export const AttendancePage: React.FC = () => {
     }
   };
 
+  const days = weekDays(weekStart);
+
+  const athleteWeeks = useMemo(() => {
+    const weeks = new Map<string, Map<string, boolean>>([[currentWeek, new Map()]]);
+    (athleteHistory?.historial || []).forEach((h: any) => {
+      const key = String(h.fecha).slice(0, 10);
+      const monday = mondayOf(key);
+      if (!weeks.has(monday)) weeks.set(monday, new Map());
+      weeks.get(monday)!.set(key, h.presente);
+    });
+    return [...weeks.entries()].sort(([a], [b]) => b.localeCompare(a));
+  }, [athleteHistory, currentWeek]);
+
+  const daysThisWeek = [...(athleteWeeks.find(([monday]) => monday === currentWeek)?.[1].values() || [])].filter(
+    Boolean,
+  ).length;
+
+  const weekNavigator = (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setWeekStart(addDays(weekStart, -7))}
+        className="p-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
+        aria-label="Semana anterior"
+      >
+        <ChevronLeft size={15} />
+      </button>
+      <span className="min-w-44 text-center text-xs font-semibold text-slate-200">
+        {formatWeekRange(weekStart)}
+      </span>
+      <button
+        type="button"
+        onClick={() => setWeekStart(addDays(weekStart, 7))}
+        disabled={weekStart >= currentWeek}
+        className="p-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 transition disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label="Semana siguiente"
+      >
+        <ChevronRight size={15} />
+      </button>
+      {weekStart !== currentWeek && (
+        <button
+          type="button"
+          onClick={() => setWeekStart(currentWeek)}
+          className="text-xs font-semibold text-emerald-400 hover:underline"
+        >
+          Hoy
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -107,8 +174,8 @@ export const AttendancePage: React.FC = () => {
           <h1 className="text-2xl font-black text-white tracking-tight">Control de Asistencia</h1>
           <p className="text-slate-400 text-xs sm:text-sm">
             {isCoach
-              ? 'Supervisa la asistencia de tus atletas y registra su presencia en cada entrenamiento.'
-              : 'Consulta tu historial de entrenamientos y valida tu presencia en cada sesión.'}
+              ? 'Sigue semana a semana la asistencia de tus atletas y registra su presencia en cada entrenamiento.'
+              : 'Consulta tus entrenamientos de cada semana y valida tu presencia en cada sesión.'}
           </p>
         </div>
 
@@ -117,6 +184,7 @@ export const AttendancePage: React.FC = () => {
             setIsRecordOpen(true);
             setError(null);
             setSuccessMsg(null);
+            setFecha(todayKey());
             if (isAthlete && user) setSelectedAthleteId(user.id);
           }}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition"
@@ -133,7 +201,7 @@ export const AttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* COACH VIEW: TEAM ATTENDANCE TABLE */}
+      {/* COACH VIEW: WEEKLY ATTENDANCE TABLE */}
       {isCoach && (
         <div className="space-y-6">
           {/* Team selector */}
@@ -145,11 +213,9 @@ export const AttendancePage: React.FC = () => {
 
             <select
               value={selectedTeamId}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                setSelectedTeamId(val);
-                fetchTeamAttendance(val);
-              }}
+              onChange={(e) =>
+                setSelectedTeamId(e.target.value === SIN_EQUIPO ? SIN_EQUIPO : Number(e.target.value))
+              }
               className="w-full sm:w-64 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-500"
             >
               {teams.map((t) => (
@@ -157,52 +223,84 @@ export const AttendancePage: React.FC = () => {
                   {t.nombre} ({t.atletas?.length || 0} atletas)
                 </option>
               ))}
+              <option value={SIN_EQUIPO}>
+                Sin equipo ({athletesList.filter((a) => !a.equipo_id).length} atletas)
+              </option>
             </select>
           </div>
 
-          {/* Attendance History Table */}
+          {/* Weekly attendance table */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-white">
-              Historial de Asistencias — {teamHistory?.equipo_nombre}
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base font-bold text-white">
+                Asistencia Semanal — {weekData?.equipo_nombre}
+              </h3>
+              {weekNavigator}
+            </div>
 
-            {(!teamHistory?.asistencias || teamHistory.asistencias.length === 0) ? (
+            {(!weekData || weekData.atletas.length === 0) ? (
               <p className="text-xs text-slate-500 italic py-6 text-center">
-                No hay registros de asistencia en este equipo aún.
+                {selectedTeamId === SIN_EQUIPO
+                  ? 'No hay atletas sin equipo.'
+                  : 'No hay atletas en este equipo aún.'}
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/80 uppercase text-[11px] font-bold text-slate-400 border-b border-slate-800">
+                  <thead className="bg-slate-950/80 text-[11px] font-bold text-slate-400 border-b border-slate-800">
                     <tr>
-                      <th className="py-3 px-4 rounded-l-xl">Fecha</th>
-                      <th className="py-3 px-4">Atleta</th>
-                      <th className="py-3 px-4">Correo</th>
-                      <th className="py-3 px-4 rounded-r-xl text-right">Estado</th>
+                      <th className="py-3 px-4 rounded-l-xl uppercase">Atleta</th>
+                      {days.map((day) => (
+                        <th
+                          key={day}
+                          className={`py-3 px-2 text-center whitespace-nowrap ${
+                            day === todayKey() ? 'text-emerald-400' : ''
+                          }`}
+                        >
+                          {formatDayLabel(day)}
+                        </th>
+                      ))}
+                      <th className="py-3 px-4 rounded-r-xl text-right uppercase">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-medium">
-                    {teamHistory.asistencias.map((item: any) => (
-                      <tr key={item.id} className="hover:bg-slate-800/30 transition">
-                        <td className="py-3 px-4 font-mono text-slate-300">
-                          {new Date(item.fecha).toISOString().split('T')[0]}
+                    {weekData.atletas.map((atleta) => (
+                      <tr key={atleta.id} className="hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4">
+                          <p className="text-white font-bold">{atleta.nombre}</p>
+                          <p className="text-[11px] text-slate-400">{atleta.email}</p>
                         </td>
-                        <td className="py-3 px-4 text-white font-bold">{item.usuario?.nombre}</td>
-                        <td className="py-3 px-4 text-slate-400">{item.usuario?.email}</td>
-                        <td className="py-3 px-4 text-right">
-                          {item.presente ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                              <CheckCircle2 size={14} /> Presente
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-rose-400 font-bold">
-                              <XCircle size={14} /> Ausente
-                            </span>
-                          )}
+                        {days.map((day) => {
+                          const registro = atleta.registros.find((r) => r.fecha === day);
+                          return (
+                            <td key={day} className="py-3 px-2 text-center">
+                              {!registro ? (
+                                <Minus size={14} className="inline text-slate-700" aria-label="Sin registro" />
+                              ) : registro.presente ? (
+                                <CheckCircle2 size={16} className="inline text-emerald-400" aria-label="Presente" />
+                              ) : (
+                                <XCircle size={16} className="inline text-rose-400" aria-label="Ausente" />
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="py-3 px-4 text-right font-bold text-slate-200 whitespace-nowrap">
+                          {formatDaysCount(atleta.dias_presente)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className="border-t border-slate-800 text-slate-400 font-semibold">
+                    <tr>
+                      <td className="py-3 px-4">Presentes por día</td>
+                      {days.map((day) => (
+                        <td key={day} className="py-3 px-2 text-center">
+                          {weekData.atletas.filter((a) => a.registros.some((r) => r.fecha === day && r.presente)).length}
+                        </td>
+                      ))}
+                      <td className="py-3 px-4" />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -210,7 +308,7 @@ export const AttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* ATHLETE VIEW: PERSONAL ATTENDANCE LOG */}
+      {/* ATHLETE VIEW: WEEKLY ATTENDANCE LOG */}
       {isAthlete && (
         <div className="space-y-6">
           {/* Summary Banner */}
@@ -226,7 +324,7 @@ export const AttendancePage: React.FC = () => {
                 <span className="text-sm font-semibold text-slate-300">sesiones completadas</span>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Registro histórico persistido en base de datos.
+                Esta semana entrenaste {formatDaysCount(daysThisWeek)}.
               </p>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
@@ -234,37 +332,47 @@ export const AttendancePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Athlete Attendance History */}
+          {/* Weekly History */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-white">Mis Días Entrenados</h3>
-            {(!athleteHistory?.historial || athleteHistory.historial.length === 0) ? (
-              <p className="text-xs text-slate-500 italic py-6 text-center">
-                Aún no tienes asistencias registradas.
-              </p>
-            ) : (
-              <div className="divide-y divide-slate-800/60">
-                {athleteHistory.historial.map((h: any) => (
-                  <div key={h.id} className="py-3 flex items-center justify-between text-xs">
-                    <span className="font-mono text-slate-300">
-                      {new Date(h.fecha).toLocaleDateString('es-AR', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+            <h3 className="text-base font-bold text-white">Mis Semanas</h3>
+            <div className="divide-y divide-slate-800/60">
+              {athleteWeeks.map(([monday, records]) => (
+                <div key={monday} className="py-4 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-300">
+                      {monday === currentWeek ? 'Esta semana' : formatWeekRange(monday)}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                      <CheckCircle2 size={14} /> Presente
+                    <span className="font-bold text-emerald-400">
+                      {formatDaysCount([...records.values()].filter(Boolean).length)}
                     </span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {weekDays(monday).map((day) => {
+                      const record = records.get(day);
+                      return (
+                        <div
+                          key={day}
+                          className={`rounded-lg border px-1 py-2 text-center text-[11px] font-semibold ${
+                            record === true
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : record === false
+                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                                : 'bg-slate-950 border-slate-800 text-slate-600'
+                          }`}
+                        >
+                          {formatDayLabel(day)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: REGISTRAR ASISTENCIA (RB-07) */}
+      {/* MODAL: REGISTRAR ASISTENCIA */}
       <Modal
         isOpen={isRecordOpen}
         onClose={() => setIsRecordOpen(false)}
@@ -310,7 +418,7 @@ export const AttendancePage: React.FC = () => {
               className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              RB-07: No se permite registrar asistencia duplicada para el mismo atleta en la misma fecha.
+              Solo se puede registrar una asistencia por atleta en cada fecha.
             </p>
           </div>
 

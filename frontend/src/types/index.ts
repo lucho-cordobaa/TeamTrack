@@ -72,6 +72,17 @@ export interface Rutina {
       email: string;
     };
   }[];
+  asignaciones_equipo?: {
+    id?: number;
+    equipo_id?: number;
+    fecha_asignacion: string;
+    equipo: {
+      id: number;
+      nombre: string;
+      atletas?: { id: number }[];
+    };
+  }[];
+  atletas_asignados?: number;
   _count?: {
     asignaciones: number;
     ejercicios: number;
@@ -89,6 +100,23 @@ export interface Asistencia {
     nombre: string;
     email: string;
   };
+}
+
+export interface AsistenciaSemanal {
+  semana_inicio: string;
+  semana_fin: string;
+  equipo_nombre: string;
+  atletas: {
+    id: number;
+    nombre: string;
+    email: string;
+    dias_presente: number;
+    registros: {
+      id: number;
+      fecha: string;
+      presente: boolean;
+    }[];
+  }[];
 }
 
 export interface SerieRealizada {

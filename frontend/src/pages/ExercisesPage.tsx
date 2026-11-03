@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import api from '../api/client';
+import React, { useState, useEffect, useRef } from 'react';
+import api, { resolveImageUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Ejercicio } from '../types';
-import { Search, Dumbbell, Filter, Plus, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Dumbbell, Filter, Plus, Info, ChevronLeft, ChevronRight, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
+import { useDialog } from '../components/ui/DialogProvider';
+
+const DEFAULT_IMAGE =
+  'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80';
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export const ExercisesPage: React.FC = () => {
   const { isCoach } = useAuth();
+  const dialog = useDialog();
   const [exercises, setExercises] = useState<Ejercicio[]>([]);
   const [muscleGroups, setMuscleGroups] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,12 +27,16 @@ export const ExercisesPage: React.FC = () => {
   // Modal Detalle
   const [selectedExercise, setSelectedExercise] = useState<Ejercicio | null>(null);
 
-  // Modal Nuevo Ejercicio
+  // Modal Nuevo / Editar Ejercicio
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<Ejercicio | null>(null);
   const [newNombre, setNewNombre] = useState('');
   const [newGrupo, setNewGrupo] = useState('');
   const [newDescripcion, setNewDescripcion] = useState('');
   const [newImagen, setNewImagen] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +53,7 @@ export const ExercisesPage: React.FC = () => {
       setExercises(exRes.data.items);
       setTotal(exRes.data.total);
       setTotalPages(exRes.data.totalPages);
+      setPage(exRes.data.page);
     } catch (err) {
       console.error('Error cargando ejercicios:', err);
     } finally {
@@ -57,38 +68,119 @@ export const ExercisesPage: React.FC = () => {
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, selectedMuscle, page, pageSize]);
 
-  useEffect(() => {
+  const fetchMuscleGroups = () => {
     api.get('/exercises/muscle-groups')
       .then((response) => setMuscleGroups(response.data))
       .catch((err) => console.error('Error cargando grupos musculares:', err));
+  };
+
+  useEffect(() => {
+    fetchMuscleGroups();
   }, []);
 
-  const handleCreateExercise = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  const openExerciseForm = (exercise: Ejercicio | null) => {
+    setEditingExercise(exercise);
+    setNewNombre(exercise?.nombre || '');
+    setNewGrupo(exercise?.grupo_muscular || '');
+    setNewDescripcion(exercise?.descripcion || '');
+    // Las imágenes subidas se muestran en la vista previa, no como URL editable
+    setNewImagen(exercise && !exercise.imagen_url.startsWith('/') ? exercise.imagen_url : '');
+    setImageFile(null);
+    setError(null);
+    setIsCreateOpen(true);
+  };
+
+  const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError('La imagen no puede superar los 5 MB');
+      return;
+    }
+    setError(null);
+    setImageFile(file);
+  };
+
+  const handleSaveExercise = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setSubmitting(true);
       setError(null);
-      await api.post('/exercises', {
+
+      let imagenUrl = newImagen.trim() || editingExercise?.imagen_url || DEFAULT_IMAGE;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('imagen', imageFile);
+        const uploadRes = await api.post('/exercises/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        imagenUrl = uploadRes.data.url;
+      }
+
+      const payload = {
         nombre: newNombre.trim(),
         grupo_muscular: newGrupo.trim(),
         descripcion: newDescripcion.trim(),
-        imagen_url:
-          newImagen.trim() ||
-          'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80',
-      });
+        imagen_url: imagenUrl,
+      };
+
+      if (editingExercise) {
+        await api.patch(`/exercises/${editingExercise.id}`, payload);
+        fetchExercises();
+      } else {
+        await api.post('/exercises', payload);
+        setPage(1);
+        if (page === 1) fetchExercises();
+      }
+
       setIsCreateOpen(false);
-      setNewNombre('');
-      setNewGrupo('');
-      setNewDescripcion('');
-      setNewImagen('');
-      setPage(1);
-      if (page === 1) fetchExercises();
+      setImageFile(null);
+      fetchMuscleGroups();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear ejercicio');
+      setError(err.response?.data?.message || 'Error al guardar ejercicio');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleDeleteExercise = async (exercise: Ejercicio) => {
+    const confirmed = await dialog.confirm({
+      title: 'Eliminar ejercicio',
+      message: exercise.fuente_externa_id
+        ? `${exercise.nombre} es parte del catálogo base: desaparecerá ahora y volverá a estar disponible en el próximo ingreso.`
+        : `¿Deseas eliminar ${exercise.nombre} del catálogo?`,
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/exercises/${exercise.id}`);
+      fetchExercises();
+      fetchMuscleGroups();
+    } catch (err: any) {
+      dialog.notify({
+        title: 'No se pudo eliminar el ejercicio',
+        message: err.response?.data?.message || 'Error al eliminar ejercicio',
+        variant: 'error',
+      });
+    }
+  };
+
+  const currentImage =
+    imagePreview ||
+    newImagen.trim() ||
+    (editingExercise ? resolveImageUrl(editingExercise.imagen_url) : null);
 
   return (
     <div className="space-y-6">
@@ -103,7 +195,7 @@ export const ExercisesPage: React.FC = () => {
 
         {isCoach && (
           <button
-            onClick={() => setIsCreateOpen(true)}
+            onClick={() => openExerciseForm(null)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition"
           >
             <Plus size={16} />
@@ -112,7 +204,7 @@ export const ExercisesPage: React.FC = () => {
         )}
       </div>
 
-      {/* RF-07: SEARCH & FILTER BAR */}
+      {/* SEARCH & FILTER BAR */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3.5 top-3 text-slate-500" size={18} />
@@ -168,13 +260,12 @@ export const ExercisesPage: React.FC = () => {
               <div>
                 <div className="relative h-44 bg-slate-950 overflow-hidden">
                   <img
-                    src={ej.imagen_url}
+                    src={resolveImageUrl(ej.imagen_url)}
                     alt={ej.nombre}
                     loading="lazy"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     onError={(e) => {
-                      (e.target as any).src =
-                        'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80';
+                      (e.target as any).src = DEFAULT_IMAGE;
                     }}
                   />
                   <div className="absolute top-3 right-3">
@@ -196,7 +287,26 @@ export const ExercisesPage: React.FC = () => {
                 <span className="flex items-center gap-1 text-[11px]">
                   <Info size={13} /> Ver técnica
                 </span>
-                <span className="font-mono text-[10px] text-slate-400">ID #{ej.id}</span>
+                {isCoach && (
+                  <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => openExerciseForm(ej)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition"
+                      title="Editar ejercicio"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExercise(ej)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                      title="Eliminar ejercicio"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -263,20 +373,13 @@ export const ExercisesPage: React.FC = () => {
           <div className="space-y-5">
             <div className="relative h-60 rounded-xl overflow-hidden bg-slate-950">
               <img
-                src={selectedExercise.imagen_url}
+                src={resolveImageUrl(selectedExercise.imagen_url)}
                 alt={selectedExercise.nombre}
                 className="w-full h-full object-cover"
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <Badge variant="emerald">{selectedExercise.grupo_muscular}</Badge>
-              {selectedExercise.fuente_externa_id && (
-                <span className="text-[11px] font-mono text-slate-500">
-                  Ref: {selectedExercise.fuente_externa_id}
-                </span>
-              )}
-            </div>
+            <Badge variant="emerald">{selectedExercise.grupo_muscular}</Badge>
 
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -290,13 +393,13 @@ export const ExercisesPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* Modal: Crear Ejercicio (Entrenador) */}
+      {/* Modal: Crear o Editar Ejercicio (Entrenador) */}
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Nuevo Ejercicio en Catálogo"
+        title={editingExercise ? 'Editar Ejercicio' : 'Nuevo Ejercicio en Catálogo'}
       >
-        <form onSubmit={handleCreateExercise} className="space-y-4">
+        <form onSubmit={handleSaveExercise} className="space-y-4">
           {error && (
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
               {error}
@@ -347,14 +450,50 @@ export const ExercisesPage: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-              URL de Imagen / GIF de Referencia
+              Imagen / GIF de Referencia
             </label>
+
+            {currentImage && (
+              <div className="relative h-40 mb-2 rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
+                <img src={currentImage} alt="Vista previa" className="w-full h-full object-cover" />
+                {imageFile && (
+                  <button
+                    type="button"
+                    onClick={() => setImageFile(null)}
+                    className="absolute top-2 right-2 p-1 rounded-lg bg-black/70 text-slate-200 hover:text-white"
+                    title="Quitar imagen seleccionada"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleSelectImage}
+              className="hidden"
+              aria-label="Archivo de imagen"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-slate-700 hover:border-emerald-500 text-xs font-semibold text-slate-300 hover:text-white transition"
+            >
+              <Upload size={15} />
+              <span className="truncate">{imageFile ? imageFile.name : 'Seleccionar imagen de tu dispositivo'}</span>
+            </button>
+            <p className="text-[11px] text-slate-500 mt-1">JPG, PNG, WEBP o GIF de hasta 5 MB.</p>
+
             <input
               type="url"
               value={newImagen}
               onChange={(e) => setNewImagen(e.target.value)}
-              placeholder="https://images.unsplash.com/..."
-              className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
+              disabled={!!imageFile}
+              placeholder="O pega la URL de una imagen: https://..."
+              className="w-full mt-2 bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none disabled:opacity-40"
             />
           </div>
 

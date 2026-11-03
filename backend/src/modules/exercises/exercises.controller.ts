@@ -1,15 +1,22 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ExercisesService } from './exercises.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
+import { exerciseImageUpload, UPLOADS_URL_PREFIX } from './exercise-image.upload';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -49,6 +56,26 @@ export class ExercisesController {
   @Post()
   create(@Body() dto: CreateExerciseDto) {
     return this.exercisesService.create(dto);
+  }
+
+  @Roles(Rol.ENTRENADOR)
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('imagen', exerciseImageUpload))
+  uploadImage(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Debes seleccionar una imagen');
+    return { url: `${UPLOADS_URL_PREFIX}/exercises/${file.filename}` };
+  }
+
+  @Roles(Rol.ENTRENADOR)
+  @Patch(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateExerciseDto) {
+    return this.exercisesService.update(id, dto);
+  }
+
+  @Roles(Rol.ENTRENADOR)
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.exercisesService.remove(id);
   }
 
   @Roles(Rol.ENTRENADOR)

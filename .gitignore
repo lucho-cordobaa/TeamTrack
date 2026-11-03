@@ -10,6 +10,9 @@
 **/coverage/
 **/*.log
 
+# Imágenes subidas por los usuarios
+backend/uploads/
+
 # Browser test output
 **/test-results/
 **/playwright-report/

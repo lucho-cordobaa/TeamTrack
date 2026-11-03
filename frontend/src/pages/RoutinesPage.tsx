@@ -6,37 +6,95 @@ import { FileText, Plus, Trash2, UserPlus, Play, Check, ChevronDown, Dumbbell, U
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
 import { ExercisePicker } from '../components/ui/ExercisePicker';
+import { useDialog } from '../components/ui/DialogProvider';
 
 interface RoutinesPageProps {
   onStartWorkout: (routineId: number) => void;
 }
 
+interface AthleteChecklistProps {
+  athletes: Usuario[];
+  selectedIds: number[];
+  assignedIds?: number[];
+  onToggle: (id: number) => void;
+}
+
+const AthleteChecklist: React.FC<AthleteChecklistProps> = ({
+  athletes,
+  selectedIds,
+  assignedIds = [],
+  onToggle,
+}) => (
+  <div className="max-h-52 overflow-y-auto space-y-1.5 bg-slate-950 p-2 rounded-xl border border-slate-800">
+    {athletes.length === 0 && (
+      <p className="text-xs text-slate-500 italic p-2 text-center">No hay atletas disponibles.</p>
+    )}
+    {athletes.map((a) => {
+      const isChecked = selectedIds.includes(a.id);
+      const isAssigned = assignedIds.includes(a.id);
+      return (
+        <button
+          type="button"
+          key={a.id}
+          disabled={isAssigned}
+          onClick={() => onToggle(a.id)}
+          className={`w-full p-2 rounded-lg flex items-center justify-between text-left text-xs transition ${
+            isAssigned
+              ? 'text-slate-500 cursor-not-allowed'
+              : isChecked
+                ? 'bg-emerald-500/20 text-white border border-emerald-500/40 font-bold'
+                : 'hover:bg-slate-900 text-slate-300'
+          }`}
+        >
+          <span>
+            {a.nombre} <span className="text-[11px] font-normal text-slate-500">({a.equipo?.nombre || 'Sin equipo'})</span>
+          </span>
+          {isAssigned ? (
+            <span className="text-[11px] font-semibold">Ya asignada</span>
+          ) : (
+            isChecked && <Check size={16} className="text-emerald-400" />
+          )}
+        </button>
+      );
+    })}
+  </div>
+);
+
 export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) => {
   const { isCoach, isAthlete } = useAuth();
+  const dialog = useDialog();
   const [routines, setRoutines] = useState<Rutina[]>([]);
   const [exercisesCatalog, setExercisesCatalog] = useState<Ejercicio[]>([]);
   const [teams, setTeams] = useState<Equipo[]>([]);
   const [athletes, setAthletes] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal: Crear Rutina (RF-05, RF-06)
+  // Modal: Crear Rutina
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<TipoRutina>('INDIVIDUAL');
   const [equipoOrigenId, setEquipoOrigenId] = useState<number | ''>('');
+  const [routineAthleteIds, setRoutineAthleteIds] = useState<number[]>([]);
   const [selectedExercises, setSelectedExercises] = useState<
     { ejercicio_id: number; series: number; repeticiones: number; orden: number }[]
   >([]);
 
-  // Modal: Asignar Rutina (RF-09, RB-04, RB-05)
+  // Modal: Asignar Rutina
   const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [routineToAssign, setRoutineToAssign] = useState<Rutina | null>(null);
+  const [routineToAssignId, setRoutineToAssignId] = useState<number | null>(null);
   const [assignTarget, setAssignTarget] = useState<'TEAM' | 'ATHLETES'>('TEAM');
   const [targetTeamId, setTargetTeamId] = useState<number | ''>('');
   const [targetAthleteIds, setTargetAthleteIds] = useState<number[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const routineToAssign = routines.find((r) => r.id === routineToAssignId) ?? null;
+  const assignedTeamIds = routineToAssign?.asignaciones_equipo?.map((a) => a.equipo.id) ?? [];
+  const assignedAthleteIds = [
+    ...(routineToAssign?.asignaciones?.map((a) => a.usuario_id) ?? []),
+    ...(routineToAssign?.asignaciones_equipo?.flatMap((a) => a.equipo.atletas?.map((atleta) => atleta.id) ?? []) ?? []),
+  ];
 
   const fetchData = async () => {
     try {
@@ -82,7 +140,15 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
     ]);
   };
 
-  const handleRemoveExerciseFromRoutine = (ejercicioId: number) => {
+  const handleRemoveExerciseFromRoutine = async (ejercicioId: number) => {
+    const ejercicio = exercisesCatalog.find((e) => e.id === ejercicioId);
+    const confirmed = await dialog.confirm({
+      title: 'Quitar ejercicio',
+      message: `¿Deseas quitar ${ejercicio?.nombre} de la rutina?`,
+      confirmLabel: 'Quitar',
+    });
+    if (!confirmed) return;
+
     const filtered = selectedExercises
       .filter((e) => e.ejercicio_id !== ejercicioId)
       .map((item, idx) => ({ ...item, orden: idx + 1 }));
@@ -108,6 +174,14 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
       setError('Debes agregar al menos un ejercicio a la rutina.');
       return;
     }
+    if (tipo === 'INDIVIDUAL' && routineAthleteIds.length === 0) {
+      setError('Debes asignar la rutina al menos a un atleta.');
+      return;
+    }
+    if (tipo === 'GRUPAL' && !equipoOrigenId) {
+      setError('Debes asignar la rutina a un equipo.');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -115,16 +189,29 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
       await api.post('/routines', {
         nombre: nombre.trim(),
         tipo,
-        equipo_origen_id: tipo === 'GRUPAL' && equipoOrigenId ? Number(equipoOrigenId) : undefined,
+        equipo_origen_id: tipo === 'GRUPAL' ? Number(equipoOrigenId) : undefined,
         ejercicios: selectedExercises,
+        atleta_ids: tipo === 'INDIVIDUAL' ? routineAthleteIds : undefined,
       });
+
+      const routineName = nombre.trim();
+      const target =
+        tipo === 'GRUPAL'
+          ? `${teams.find((t) => t.id === equipoOrigenId)?.nombre}`
+          : `${routineAthleteIds.length} ${routineAthleteIds.length === 1 ? 'atleta' : 'atletas'}`;
 
       setIsCreateOpen(false);
       setNombre('');
       setTipo('INDIVIDUAL');
       setEquipoOrigenId('');
+      setRoutineAthleteIds([]);
       setSelectedExercises([]);
       fetchData();
+
+      dialog.notify({
+        title: 'Rutina creada y asignada',
+        message: `${routineName} se asignó a ${target}.`,
+      });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear rutina');
     } finally {
@@ -132,14 +219,51 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
     }
   };
 
-  const handleDeleteRoutine = async (routineId: number) => {
-    if (!confirm('¿Deseas eliminar esta rutina?')) return;
+  const handleDeleteRoutine = async (routine: Rutina) => {
+    const confirmed = await dialog.confirm({
+      title: 'Eliminar rutina',
+      message: `¿Deseas eliminar ${routine.nombre}? Se quitará a todos los atletas que la tengan asignada y se borrará su historial de series en esta rutina.`,
+    });
+    if (!confirmed) return;
+
     try {
-      await api.delete(`/routines/${routineId}`);
+      await api.delete(`/routines/${routine.id}`);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar rutina');
+      dialog.notify({
+        title: 'No se pudo eliminar la rutina',
+        message: err.response?.data?.message || 'Error al eliminar rutina',
+        variant: 'error',
+      });
     }
+  };
+
+  const handleUnassign = async (name: string, endpoint: string) => {
+    const confirmed = await dialog.confirm({
+      title: 'Quitar asignación',
+      message: `${name} dejará de ver esta rutina. Su historial de entrenamientos se conserva.`,
+      confirmLabel: 'Quitar',
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.delete(endpoint);
+      fetchData();
+    } catch (err: any) {
+      dialog.notify({
+        title: 'No se pudo quitar la asignación',
+        message: err.response?.data?.message || 'Error al quitar la asignación',
+        variant: 'error',
+      });
+    }
+  };
+
+  const openAssignModal = (routine: Rutina) => {
+    setRoutineToAssignId(routine.id);
+    setTargetTeamId('');
+    setTargetAthleteIds([]);
+    setError(null);
+    setIsAssignOpen(true);
   };
 
   const handleAssignRoutine = async (e: React.FormEvent) => {
@@ -161,13 +285,26 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
         return;
       }
 
-      await api.post(`/routines/${routineToAssign.id}/assign`, payload);
+      const { data } = await api.post(`/routines/${routineToAssign.id}/assign`, payload);
+      const routineName = routineToAssign.nombre;
+      const teamName = teams.find((t) => t.id === payload.equipo_id)?.nombre;
       setIsAssignOpen(false);
-      setRoutineToAssign(null);
+      setRoutineToAssignId(null);
       setTargetTeamId('');
       setTargetAthleteIds([]);
-      alert('¡Rutina asignada exitosamente!');
       fetchData();
+
+      const previous = data.total - data.nuevas;
+      dialog.notify({
+        title: data.nuevas > 0 ? 'Rutina asignada' : 'Rutina ya asignada',
+        message: payload.equipo_id
+          ? `${routineName} se asignó a ${teamName}. La verán todos sus atletas, también los que se sumen después.`
+          : data.nuevas > 0
+            ? `${routineName} se asignó a ${data.nuevas} ${data.nuevas === 1 ? 'atleta' : 'atletas'}.${
+                previous > 0 ? ` ${previous} ya la ${previous === 1 ? 'tenía' : 'tenían'}.` : ''
+              }`
+            : 'Los atletas seleccionados ya tenían esta rutina.',
+      });
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al asignar rutina');
     } finally {
@@ -175,11 +312,8 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
     }
   };
 
-  const toggleAthleteSelection = (id: number) => {
-    setTargetAthleteIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
+  const toggleId = (id: number) => (prev: number[]) =>
+    prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
 
   return (
     <div className="space-y-6">
@@ -235,9 +369,9 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                       <Badge variant={routine.tipo === 'GRUPAL' ? 'purple' : 'blue'}>
                         {routine.tipo === 'GRUPAL' ? 'Grupal' : 'Individual'}
                       </Badge>
-                      {routine.equipo_origen && (
+                      {!!routine.asignaciones_equipo?.length && (
                         <span className="text-xs text-slate-400">
-                          ({routine.equipo_origen.nombre})
+                          ({routine.asignaciones_equipo.map((a) => a.equipo.nombre).join(', ')})
                         </span>
                       )}
                     </div>
@@ -247,11 +381,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                   {isCoach && (
                     <div className="flex items-center space-x-1.5">
                       <button
-                        onClick={() => {
-                          setRoutineToAssign(routine);
-                          setIsAssignOpen(true);
-                          setError(null);
-                        }}
+                        onClick={() => openAssignModal(routine)}
                         className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold flex items-center gap-1.5 transition"
                         title="Asignar a atletas o equipo"
                       >
@@ -260,7 +390,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                       </button>
 
                       <button
-                        onClick={() => handleDeleteRoutine(routine.id)}
+                        onClick={() => handleDeleteRoutine(routine)}
                         className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                         title="Eliminar rutina"
                       >
@@ -315,13 +445,10 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                 {isCoach && (
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>
-                      {routine.asignaciones?.length || routine._count?.asignaciones || 0} Atletas asignados
+                      {routine.atletas_asignados ?? 0} Atletas asignados
                     </span>
                     <button
-                      onClick={() => {
-                        setRoutineToAssign(routine);
-                        setIsAssignOpen(true);
-                      }}
+                      onClick={() => openAssignModal(routine)}
                       className="text-emerald-400 hover:underline font-semibold"
                     >
                       Gestionar asignaciones →
@@ -334,7 +461,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
         </div>
       )}
 
-      {/* MODAL: CONSTRUCTOR DE RUTINAS (RF-05, RF-06) */}
+      {/* MODAL: CONSTRUCTOR DE RUTINAS */}
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
@@ -381,20 +508,33 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
           {tipo === 'GRUPAL' && (
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                Equipo de Origen
+                Asignar a Equipo
               </label>
               <select
                 value={equipoOrigenId}
                 onChange={(e) => setEquipoOrigenId(Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
               >
-                <option value="">-- Selecciona equipo destinatario --</option>
+                <option value="">-- Selecciona el equipo --</option>
                 {teams.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.nombre}
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {tipo === 'INDIVIDUAL' && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Asignar a Atletas
+              </label>
+              <AthleteChecklist
+                athletes={athletes}
+                selectedIds={routineAthleteIds}
+                onToggle={(id) => setRoutineAthleteIds(toggleId(id))}
+              />
             </div>
           )}
 
@@ -501,7 +641,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
         </form>
       </Modal>
 
-      {/* MODAL: ASIGNAR RUTINA (RF-09, RB-04, RB-05) */}
+      {/* MODAL: ASIGNAR RUTINA */}
       <Modal
         isOpen={isAssignOpen}
         onClose={() => setIsAssignOpen(false)}
@@ -514,6 +654,50 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
             </div>
           )}
 
+          {/* Asignaciones actuales */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              Asignada Actualmente a
+            </p>
+            {!routineToAssign?.asignaciones_equipo?.length && !routineToAssign?.asignaciones?.length ? (
+              <p className="text-xs text-amber-400 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                Esta rutina no está asignada a nadie.
+              </p>
+            ) : (
+              <div className="max-h-44 overflow-y-auto space-y-1.5 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                {routineToAssign?.asignaciones_equipo?.map((a) => (
+                  <div key={a.equipo.id} className="p-2 rounded-lg flex items-center justify-between text-xs text-slate-300">
+                    <span className="flex items-center gap-2">
+                      <Users size={14} className="text-emerald-400" />
+                      {a.equipo.nombre} ({a.equipo.atletas?.length || 0} atletas)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleUnassign(a.equipo.nombre, `/routines/${routineToAssign.id}/unassign-team/${a.equipo.id}`)}
+                      className="font-semibold text-slate-400 hover:text-rose-400"
+                      aria-label={`Quitar ${a.equipo.nombre}`}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+                {routineToAssign?.asignaciones?.map((a) => (
+                  <div key={a.usuario_id} className="p-2 rounded-lg flex items-center justify-between text-xs text-slate-300">
+                    <span>{a.usuario?.nombre}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleUnassign(a.usuario?.nombre || 'El atleta', `/routines/${routineToAssign.id}/unassign/${a.usuario_id}`)}
+                      className="font-semibold text-slate-400 hover:text-rose-400"
+                      aria-label={`Quitar ${a.usuario?.nombre}`}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button
               type="button"
@@ -524,7 +708,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              Todo un Equipo (RB-05)
+              Todo un Equipo
             </button>
             <button
               type="button"
@@ -550,14 +734,16 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                 className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
               >
                 <option value="">-- Selecciona el equipo --</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nombre} ({t.atletas?.length || 0} atletas)
-                  </option>
-                ))}
+                {teams
+                  .filter((t) => !assignedTeamIds.includes(t.id))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre} ({t.atletas?.length || 0} atletas)
+                    </option>
+                  ))}
               </select>
               <p className="text-[11px] text-slate-500 mt-2">
-                RB-05: Al asignar a un equipo, se creará automáticamente un registro en <code>AsignacionRutina</code> para cada atleta del equipo.
+                La verán todos los atletas del equipo, también los que se sumen después. Quienes salgan del equipo dejarán de verla.
               </p>
             </div>
           ) : (
@@ -565,25 +751,12 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
                 Seleccionar Atletas
               </label>
-              <div className="max-h-52 overflow-y-auto space-y-1.5 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                {athletes.map((a) => {
-                  const isChecked = targetAthleteIds.includes(a.id);
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => toggleAthleteSelection(a.id)}
-                      className={`p-2 rounded-lg flex items-center justify-between cursor-pointer text-xs transition ${
-                        isChecked
-                          ? 'bg-emerald-500/20 text-white border border-emerald-500/40 font-bold'
-                          : 'hover:bg-slate-900 text-slate-300'
-                      }`}
-                    >
-                      <span>{a.nombre}</span>
-                      {isChecked && <Check size={16} className="text-emerald-400" />}
-                    </div>
-                  );
-                })}
-              </div>
+              <AthleteChecklist
+                athletes={athletes}
+                selectedIds={targetAthleteIds}
+                assignedIds={assignedAthleteIds}
+                onToggle={(id) => setTargetAthleteIds(toggleId(id))}
+              />
             </div>
           )}
 

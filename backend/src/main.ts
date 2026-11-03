@@ -1,10 +1,12 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from './modules/exercises/exercise-image.upload';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors({
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
@@ -14,6 +16,7 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+  app.useStaticAssets(UPLOADS_DIR, { prefix: `${UPLOADS_URL_PREFIX}/` });
 
   app.useGlobalPipes(
     new ValidationPipe({

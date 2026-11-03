@@ -1,10 +1,46 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
+import { FreeExercise, loadExerciseDataset, toExerciseData } from './exercise-dataset';
 
 @Injectable()
-export class ExercisesService {
+export class ExercisesService implements OnApplicationBootstrap {
+  private dataset: FreeExercise[] | null = null;
+  private restoring: Promise<void> | null = null;
+
   constructor(private prisma: PrismaService) {}
+
+  onApplicationBootstrap() {
+    return this.restoreDataset();
+  }
+
+  // El dataset debe estar siempre disponible: se vuelven a crear los ejercicios que falten,
+  // sin pisar los que un entrenador haya editado. Un fallo acá no debe impedir el ingreso.
+  restoreDataset(): Promise<void> {
+    if (!this.restoring) {
+      this.restoring = this.insertMissingDatasetExercises()
+        .catch((err) => console.error('No se pudo restaurar el dataset de ejercicios:', err))
+        .finally(() => {
+          this.restoring = null;
+        });
+    }
+    return this.restoring;
+  }
+
+  private async insertMissingDatasetExercises() {
+    this.dataset = this.dataset ?? loadExerciseDataset();
+
+    const existing = await this.prisma.ejercicio.findMany({
+      where: { fuente_externa_id: { not: null } },
+      select: { fuente_externa_id: true },
+    });
+    const existingIds = new Set(existing.map((exercise) => exercise.fuente_externa_id));
+    const missing = this.dataset.filter((exercise) => !existingIds.has(exercise.id));
+
+    if (missing.length > 0) {
+      await this.prisma.ejercicio.createMany({ data: missing.map(toExerciseData) });
+    }
+  }
 
   async findAll(search?: string, muscleGroup?: string, requestedPage?: number, requestedPageSize?: number) {
     const where: any = {};
@@ -64,7 +100,33 @@ export class ExercisesService {
     });
   }
 
-  // RF-08: Importación de catálogo desde dataset externo
+  async update(id: number, dto: CreateExerciseDto) {
+    await this.findOne(id);
+    return this.prisma.ejercicio.update({
+      where: { id },
+      data: dto,
+    });
+  }
+
+  async remove(id: number) {
+    await this.findOne(id);
+
+    // Las relaciones borran en cascada: eliminar un ejercicio en uso alteraría rutinas e historiales
+    const [rutinas, series] = await Promise.all([
+      this.prisma.rutinaEjercicio.count({ where: { ejercicio_id: id } }),
+      this.prisma.serieRealizada.count({ where: { ejercicio_id: id } }),
+    ]);
+    if (rutinas > 0 || series > 0) {
+      throw new ConflictException(
+        'No se puede eliminar este ejercicio porque ya se usa en rutinas o en el historial de los atletas. Puedes editarlo.',
+      );
+    }
+
+    await this.prisma.ejercicio.delete({ where: { id } });
+    return { message: 'Ejercicio eliminado con éxito' };
+  }
+
+  // Importación de catálogo desde dataset externo
   async importDataset(items: CreateExerciseDto[]) {
     const created: any[] = [];
     for (const item of items) {

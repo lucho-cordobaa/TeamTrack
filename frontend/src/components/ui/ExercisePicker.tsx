@@ -18,7 +18,7 @@ const normalize = (text: string) =>
     .toLowerCase()
     .trim();
 
-// Buscador con filtro por grupo muscular para listas de ejercicios (RF-07)
+// Buscador con filtro por grupo muscular para listas de ejercicios
 export const ExercisePicker: React.FC<ExercisePickerProps> = ({
   exercises,
   onSelect,

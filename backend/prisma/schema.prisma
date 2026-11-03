@@ -18,14 +18,15 @@ enum TipoRutina {
 }
 
 model Equipo {
-  id               Int       @id @default(autoincrement())
-  nombre           String    @db.VarChar(100)
+  id               Int                @id @default(autoincrement())
+  nombre           String             @db.VarChar(100)
   entrenador_id    Int
-  entrenador       Usuario   @relation("EntrenadorEquipos", fields: [entrenador_id], references: [id], onDelete: Cascade)
-  atletas          Usuario[] @relation("EquipoAtletas")
-  rutinas_grupales Rutina[]  @relation("EquipoRutinas")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  entrenador       Usuario            @relation("EntrenadorEquipos", fields: [entrenador_id], references: [id], onDelete: Cascade)
+  atletas          Usuario[]          @relation("EquipoAtletas")
+  rutinas_grupales Rutina[]           @relation("EquipoRutinas")
+  asignaciones     AsignacionEquipo[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@map("equipos")
 }
@@ -50,18 +51,19 @@ model Usuario {
 }
 
 model Rutina {
-  id                Int                @id @default(autoincrement())
-  nombre            String             @db.VarChar(150)
-  tipo              TipoRutina         @default(INDIVIDUAL)
-  creado_por        Int
-  entrenador        Usuario            @relation("RutinasCreadas", fields: [creado_por], references: [id], onDelete: Cascade)
-  equipo_origen_id  Int?
-  equipo_origen     Equipo?            @relation("EquipoRutinas", fields: [equipo_origen_id], references: [id], onDelete: SetNull)
-  ejercicios        RutinaEjercicio[]
-  asignaciones      AsignacionRutina[]
-  series_realizadas SerieRealizada[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                  Int                @id @default(autoincrement())
+  nombre              String             @db.VarChar(150)
+  tipo                TipoRutina         @default(INDIVIDUAL)
+  creado_por          Int
+  entrenador          Usuario            @relation("RutinasCreadas", fields: [creado_por], references: [id], onDelete: Cascade)
+  equipo_origen_id    Int?
+  equipo_origen       Equipo?            @relation("EquipoRutinas", fields: [equipo_origen_id], references: [id], onDelete: SetNull)
+  ejercicios          RutinaEjercicio[]
+  asignaciones        AsignacionRutina[]
+  asignaciones_equipo AsignacionEquipo[]
+  series_realizadas   SerieRealizada[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   @@map("rutinas")
 }
@@ -105,6 +107,20 @@ model AsignacionRutina {
 
   @@unique([rutina_id, usuario_id])
   @@map("asignaciones_rutina")
+}
+
+// Asignación a un equipo: alcanza a quienes pertenezcan al equipo en cada momento.
+// AsignacionRutina guarda solo las asignaciones individuales.
+model AsignacionEquipo {
+  id               Int      @id @default(autoincrement())
+  rutina_id        Int
+  rutina           Rutina   @relation(fields: [rutina_id], references: [id], onDelete: Cascade)
+  equipo_id        Int
+  equipo           Equipo   @relation(fields: [equipo_id], references: [id], onDelete: Cascade)
+  fecha_asignacion DateTime @default(now())
+
+  @@unique([rutina_id, equipo_id])
+  @@map("asignaciones_equipo")
 }
 
 model Asistencia {

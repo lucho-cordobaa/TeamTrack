@@ -5,9 +5,11 @@ import { Equipo, Usuario } from '../types';
 import { Users, Plus, Trash2, UserPlus, UserMinus, ShieldCheck, Mail, AlertCircle } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
+import { useDialog } from '../components/ui/DialogProvider';
 
 export const TeamsPage: React.FC = () => {
   const { isCoach } = useAuth();
+  const dialog = useDialog();
   const [teams, setTeams] = useState<Equipo[]>([]);
   const [unassignedAthletes, setUnassignedAthletes] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,23 +81,42 @@ export const TeamsPage: React.FC = () => {
     }
   };
 
-  const handleRemoveAthlete = async (teamId: number, athleteId: number) => {
-    if (!confirm('¿Deseas desvincular a este atleta del equipo?')) return;
+  const handleRemoveAthlete = async (team: Equipo, athlete: Usuario) => {
+    const confirmed = await dialog.confirm({
+      title: 'Quitar atleta del equipo',
+      message: `¿Deseas quitar a ${athlete.nombre} de ${team.nombre}? Dejará de ver las rutinas asignadas al equipo.`,
+      confirmLabel: 'Quitar',
+    });
+    if (!confirmed) return;
+
     try {
-      await api.delete(`/teams/${teamId}/athletes/${athleteId}`);
+      await api.delete(`/teams/${team.id}/athletes/${athlete.id}`);
       fetchTeamsAndAthletes();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al desvincular atleta');
+      dialog.notify({
+        title: 'No se pudo quitar al atleta',
+        message: err.response?.data?.message || 'Error al desvincular atleta',
+        variant: 'error',
+      });
     }
   };
 
-  const handleDeleteTeam = async (teamId: number) => {
-    if (!confirm('¿Estás seguro de eliminar este equipo? Los atletas quedarán sin equipo asignado.')) return;
+  const handleDeleteTeam = async (team: Equipo) => {
+    const confirmed = await dialog.confirm({
+      title: 'Eliminar equipo',
+      message: `¿Estás seguro de eliminar ${team.nombre}? Los atletas quedarán sin equipo y dejarán de ver las rutinas asignadas a él.`,
+    });
+    if (!confirmed) return;
+
     try {
-      await api.delete(`/teams/${teamId}`);
+      await api.delete(`/teams/${team.id}`);
       fetchTeamsAndAthletes();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al eliminar equipo');
+      dialog.notify({
+        title: 'No se pudo eliminar el equipo',
+        message: err.response?.data?.message || 'Error al eliminar equipo',
+        variant: 'error',
+      });
     }
   };
 
@@ -155,7 +176,7 @@ export const TeamsPage: React.FC = () => {
                     <Badge variant="blue">{team.atletas?.length || 0} Atletas</Badge>
                     {isCoach && (
                       <button
-                        onClick={() => handleDeleteTeam(team.id)}
+                        onClick={() => handleDeleteTeam(team)}
                         className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                         title="Eliminar equipo"
                       >
@@ -192,7 +213,7 @@ export const TeamsPage: React.FC = () => {
                       {team.atletas.map((atleta) => (
                         <div
                           key={atleta.id}
-                          className="py-2.5 flex items-center justify-between group text-xs"
+                          className="py-2.5 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center space-x-2.5">
                             <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center font-bold text-[11px]">
@@ -206,11 +227,12 @@ export const TeamsPage: React.FC = () => {
 
                           {isCoach && (
                             <button
-                              onClick={() => handleRemoveAthlete(team.id, atleta.id)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition opacity-0 group-hover:opacity-100"
+                              onClick={() => handleRemoveAthlete(team, atleta)}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
                               title="Quitar del equipo"
                             >
                               <UserMinus size={14} />
+                              <span>Quitar</span>
                             </button>
                           )}
                         </div>
@@ -270,7 +292,7 @@ export const TeamsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Modal: Asociar Atleta a Equipo (RB-03) */}
+      {/* Modal: Asociar Atleta a Equipo */}
       <Modal
         isOpen={!!selectedTeamForAdd}
         onClose={() => setSelectedTeamForAdd(null)}

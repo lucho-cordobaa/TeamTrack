@@ -74,4 +74,14 @@ export class RoutinesController {
   ) {
     return this.routinesService.unassign(id, coachId, athleteId);
   }
+
+  @Roles(Rol.ENTRENADOR)
+  @Delete(':id/unassign-team/:teamId')
+  unassignTeam(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @CurrentUser('id') coachId: number,
+  ) {
+    return this.routinesService.unassignTeam(id, coachId, teamId);
+  }
 }

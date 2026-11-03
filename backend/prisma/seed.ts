@@ -1,18 +1,6 @@
 import { PrismaClient, Rol, TipoRutina } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-
-interface FreeExercise {
-  id: string;
-  name: string;
-  primaryMuscles: string[];
-  instructions: string[];
-  images: string[];
-  name_es: string;
-  primaryMuscles_es: string[];
-  instructions_es?: string;
-}
-
-const ejerciciosData = require('./datasets/free-exercise-db.json') as FreeExercise[];
+import { loadExerciseDataset, toExerciseData } from '../src/modules/exercises/exercise-dataset';
 
 const prisma = new PrismaClient();
 
@@ -136,15 +124,7 @@ async function main() {
 
   // 4. Catálogo de Ejercicios
   await prisma.ejercicio.createMany({
-    data: ejerciciosData.map((ej) => ({
-      nombre: ej.name_es || ej.name,
-      grupo_muscular: (ej.primaryMuscles_es?.length ? ej.primaryMuscles_es : ej.primaryMuscles).join(', '),
-      descripcion: ej.instructions_es || ej.instructions.join('\n') || 'Sin instrucciones disponibles.',
-      imagen_url: ej.images[0]
-        ? `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${ej.images[0]}`
-        : '',
-      fuente_externa_id: ej.id,
-    })),
+    data: loadExerciseDataset().map(toExerciseData),
   });
 
   const ejerciciosCreados = await prisma.ejercicio.findMany({
@@ -215,13 +195,13 @@ async function main() {
     },
   });
 
-  // 6. Asignaciones de Rutina (RB-04, RB-05)
-  // Al asignar rutina grupal al equipo Halcones Rugby, asignamos a Joaquín, Sofía y Mateo:
+  // 6. Asignaciones de Rutina
+  // La rutina grupal se asigna al equipo Halcones Rugby; el resto son asignaciones individuales
+  await prisma.asignacionEquipo.create({
+    data: { rutina_id: rutinaGrupal.id, equipo_id: team1.id },
+  });
   await prisma.asignacionRutina.createMany({
     data: [
-      { rutina_id: rutinaGrupal.id, usuario_id: atleta1.id },
-      { rutina_id: rutinaGrupal.id, usuario_id: atleta2.id },
-      { rutina_id: rutinaGrupal.id, usuario_id: atleta3.id },
       { rutina_id: rutinaHipertrofia.id, usuario_id: atleta1.id },
       { rutina_id: rutinaHipertrofia.id, usuario_id: atleta2.id },
       { rutina_id: rutinaIndividual.id, usuario_id: atleta1.id },

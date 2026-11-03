@@ -65,7 +65,7 @@ export const CoachDashboard: React.FC<CoachDashboardProps> = ({ onNavigate }) =>
   useEffect(() => {
     if (selectedTeamId) {
       fetchLiveSessions(selectedTeamId);
-      // Intervalo de sondeo en tiempo real para supervisión del entrenador (RF-15)
+      // Intervalo de sondeo en tiempo real para supervisión del entrenador
       const interval = setInterval(() => {
         fetchLiveSessions(selectedTeamId);
       }, 4000);
@@ -140,14 +140,14 @@ export const CoachDashboard: React.FC<CoachDashboardProps> = ({ onNavigate }) =>
         </div>
       </div>
 
-      {/* RF-15: LIVE TRAINING MONITOR */}
+      {/* LIVE TRAINING MONITOR */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
               <h2 className="text-lg font-bold text-white tracking-tight">
-                Monitoreo en Tiempo Real (Firestore)
+                Monitoreo en Tiempo Real
               </h2>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">

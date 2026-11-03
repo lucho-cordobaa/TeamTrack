@@ -53,11 +53,8 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     await routineForm.locator('input[type="number"]').nth(0).fill('1');
     await routineForm.locator('input[type="number"]').nth(1).fill('5');
     await page.getByRole('button', { name: 'Crear Rutina Completa' }).click();
-    await expect(page.getByRole('heading', { name: routineName, exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Asignar', exact: true }).click();
-    await page.locator('select').last().selectOption({ index: 1 });
-    await page.getByRole('button', { name: /Confirmar Asignaci/ }).click();
+    await expect(page.getByRole('alertdialog')).toContainText('Rutina creada y asignada');
+    await page.getByRole('button', { name: 'Aceptar' }).click();
     await expect(page.getByRole('heading', { name: routineName, exact: true })).toBeVisible();
 
     await register(concurrentAthletePage, 'Atleta Concurrencia E2E', 'teamtrack-e2e-concurrency@teamtrack.test', 'Atleta');
@@ -101,7 +98,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     await page.locator('select').last().selectOption({ label: 'Atleta E2E (Equipo E2E TeamTrack)' });
     await page.locator('input[type="date"]').fill(new Date().toISOString().slice(0, 10));
     await page.getByRole('button', { name: 'Confirmar Asistencia' }).click();
-    await expect(page.getByText(/Atleta E2E/)).toBeVisible();
+    await expect(page.getByRole('row', { name: /Atleta E2E/ }).getByText('1 día')).toBeVisible();
 
     await page.getByRole('button', { name: 'Registrar Asistencia' }).click();
     await page.locator('select').last().selectOption({ label: 'Atleta E2E (Equipo E2E TeamTrack)' });
@@ -159,7 +156,7 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     })).status()).toBe(403);
 
     await navigate(page, 'Dashboard');
-    await expect(page.getByText('Monitoreo en Tiempo Real (Firestore)')).toBeVisible();
+    await expect(page.getByText('Monitoreo en Tiempo Real')).toBeVisible();
     await expect(page.getByText('Atleta E2E')).toBeVisible({ timeout: 12_000 });
     await expect(page.getByText(/100% \(1\/1 series\)/)).toBeVisible();
 
@@ -195,13 +192,13 @@ test('flujo integral: equipo, rutina, asistencia, sesión en vivo y progreso', a
     expect((await routineUpdate.json()).nombre).toBe(renamedRoutine);
 
     await navigate(page, 'Constructor Rutinas');
-    page.once('dialog', (dialog) => dialog.accept());
     await page.getByTitle('Eliminar rutina').click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Eliminar' }).click();
     await expect(page.getByText('No hay rutinas disponibles')).toBeVisible();
 
     await navigate(page, 'Equipos & Atletas');
-    page.once('dialog', (dialog) => dialog.accept());
     await page.getByTitle('Eliminar equipo').click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Eliminar' }).click();
     await expect(page.getByText('No hay equipos registrados')).toBeVisible();
   } finally {
     await athleteContext.close();

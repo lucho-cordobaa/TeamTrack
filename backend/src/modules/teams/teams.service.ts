@@ -139,6 +139,11 @@ export class TeamsService {
     if (!team) throw new NotFoundException('Equipo no encontrado');
     if (team.entrenador_id !== coachId) throw new ForbiddenException('No tienes permiso sobre este equipo');
 
+    const athlete = await this.prisma.usuario.findUnique({ where: { id: atletaId } });
+    if (!athlete || athlete.equipo_id !== teamId) {
+      throw new NotFoundException('El atleta no pertenece a este equipo');
+    }
+
     return this.prisma.usuario.update({
       where: { id: atletaId },
       data: { equipo_id: null },
