@@ -44,6 +44,7 @@ model Usuario {
   asignaciones       AsignacionRutina[]
   asistencias        Asistencia[]
   series_realizadas  SerieRealizada[]
+  entrenamientos     EntrenamientoRealizado[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -62,6 +63,7 @@ model Rutina {
   asignaciones        AsignacionRutina[]
   asignaciones_equipo AsignacionEquipo[]
   series_realizadas   SerieRealizada[]
+  entrenamientos      EntrenamientoRealizado[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
@@ -141,12 +143,33 @@ model SerieRealizada {
   usuario                 Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   ejercicio_id            Int
   ejercicio               Ejercicio @relation(fields: [ejercicio_id], references: [id], onDelete: Cascade)
-  rutina_id               Int
-  rutina                  Rutina    @relation(fields: [rutina_id], references: [id], onDelete: Cascade)
+  rutina_id               Int?
+  rutina                  Rutina?   @relation(fields: [rutina_id], references: [id], onDelete: SetNull)
+  entrenamiento_id        String?   @db.VarChar(36)
+  entrenamiento           EntrenamientoRealizado? @relation(fields: [entrenamiento_id], references: [id], onDelete: SetNull)
   numero_serie            Int
   peso_kg                 Decimal   @db.Decimal(6, 2)
   repeticiones_realizadas Int
   fecha                   DateTime  @default(now())
 
+  @@index([entrenamiento_id])
+  @@index([usuario_id, ejercicio_id, peso_kg])
+
   @@map("series_realizadas")
+}
+
+model EntrenamientoRealizado {
+  id             String           @id @db.VarChar(36)
+  usuario_id     Int
+  usuario        Usuario          @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  rutina_id      Int?
+  rutina         Rutina?          @relation(fields: [rutina_id], references: [id], onDelete: SetNull)
+  rutina_nombre  String           @db.VarChar(150)
+  fecha_inicio   DateTime
+  fecha_fin      DateTime
+  duracion_segundos Int
+  series         SerieRealizada[]
+
+  @@index([usuario_id, fecha_inicio])
+  @@map("entrenamientos_realizados")
 }

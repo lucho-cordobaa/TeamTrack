@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Rutina, Ejercicio, Equipo, Usuario, TipoRutina } from '../types';
-import { FileText, Plus, Trash2, UserPlus, Play, Check, ChevronDown, Dumbbell, Users } from 'lucide-react';
+import { FileText, Plus, Trash2, UserPlus, Play, Check, ChevronDown, Dumbbell, Users, Pencil } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
 import { ExercisePicker } from '../components/ui/ExercisePicker';
@@ -71,6 +71,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
 
   // Modal: Crear Rutina
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingRoutine, setEditingRoutine] = useState<Rutina | null>(null);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<TipoRutina>('INDIVIDUAL');
   const [equipoOrigenId, setEquipoOrigenId] = useState<number | ''>('');
@@ -174,11 +175,11 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
       setError('Debes agregar al menos un ejercicio a la rutina.');
       return;
     }
-    if (tipo === 'INDIVIDUAL' && routineAthleteIds.length === 0) {
+    if (!editingRoutine && tipo === 'INDIVIDUAL' && routineAthleteIds.length === 0) {
       setError('Debes asignar la rutina al menos a un atleta.');
       return;
     }
-    if (tipo === 'GRUPAL' && !equipoOrigenId) {
+    if (!editingRoutine && tipo === 'GRUPAL' && !equipoOrigenId) {
       setError('Debes asignar la rutina a un equipo.');
       return;
     }
@@ -186,16 +187,22 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
     try {
       setSubmitting(true);
       setError(null);
-      await api.post('/routines', {
+      const payload = {
         nombre: nombre.trim(),
         tipo,
         equipo_origen_id: tipo === 'GRUPAL' ? Number(equipoOrigenId) : undefined,
         ejercicios: selectedExercises,
-        atleta_ids: tipo === 'INDIVIDUAL' ? routineAthleteIds : undefined,
-      });
+        ...(!editingRoutine && tipo === 'INDIVIDUAL' ? { atleta_ids: routineAthleteIds } : {}),
+      };
+
+      if (editingRoutine) {
+        await api.patch(`/routines/${editingRoutine.id}`, payload);
+      } else {
+        await api.post('/routines', payload);
+      }
 
       const routineName = nombre.trim();
-      const target =
+      const target = editingRoutine ? '' :
         tipo === 'GRUPAL'
           ? `${teams.find((t) => t.id === equipoOrigenId)?.nombre}`
           : `${routineAthleteIds.length} ${routineAthleteIds.length === 1 ? 'atleta' : 'atletas'}`;
@@ -206,17 +213,48 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
       setEquipoOrigenId('');
       setRoutineAthleteIds([]);
       setSelectedExercises([]);
+      setEditingRoutine(null);
       fetchData();
 
-      dialog.notify({
+      dialog.notify(editingRoutine ? {
+        title: 'Rutina actualizada',
+        message: `${routineName} se guardó correctamente.`,
+      } : {
         title: 'Rutina creada y asignada',
         message: `${routineName} se asignó a ${target}.`,
       });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al crear rutina');
+      setError(err.response?.data?.message || (editingRoutine ? 'Error al actualizar rutina' : 'Error al crear rutina'));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openRoutineEditor = (routine: Rutina) => {
+    setEditingRoutine(routine);
+    setNombre(routine.nombre);
+    setTipo(routine.tipo);
+    setEquipoOrigenId(routine.equipo_origen_id ?? routine.asignaciones_equipo?.[0]?.equipo.id ?? '');
+    setRoutineAthleteIds([]);
+    setSelectedExercises((routine.ejercicios ?? []).map((item, index) => ({
+      ejercicio_id: item.ejercicio_id,
+      series: item.series,
+      repeticiones: item.repeticiones,
+      orden: item.orden || index + 1,
+    })));
+    setError(null);
+    setIsCreateOpen(true);
+  };
+
+  const openRoutineCreator = () => {
+    setEditingRoutine(null);
+    setNombre('');
+    setTipo('INDIVIDUAL');
+    setEquipoOrigenId('');
+    setRoutineAthleteIds([]);
+    setSelectedExercises([]);
+    setError(null);
+    setIsCreateOpen(true);
   };
 
   const handleDeleteRoutine = async (routine: Rutina) => {
@@ -333,7 +371,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
         {isCoach && (
           <button
             onClick={() => {
-              setIsCreateOpen(true);
+              openRoutineCreator();
               setError(null);
             }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition"
@@ -389,6 +427,13 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
                         <span>Asignar</span>
                       </button>
 
+                      <button
+                        onClick={() => openRoutineEditor(routine)}
+                        className="p-1.5 rounded-xl text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition"
+                        title="Editar rutina"
+                      >
+                        <Pencil size={16} />
+                      </button>
                       <button
                         onClick={() => handleDeleteRoutine(routine)}
                         className="p-1.5 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
@@ -465,7 +510,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Constructor de Rutina"
+        title={editingRoutine ? 'Editar Rutina' : 'Constructor de Rutina'}
         maxWidth="max-w-2xl"
       >
         <form onSubmit={handleCreateRoutine} className="space-y-5">
@@ -497,6 +542,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
               <select
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value as TipoRutina)}
+                disabled={!!editingRoutine}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
               >
                 <option value="INDIVIDUAL">Individual (personalizada)</option>
@@ -513,6 +559,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
               <select
                 value={equipoOrigenId}
                 onChange={(e) => setEquipoOrigenId(Number(e.target.value))}
+                disabled={!!editingRoutine}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
               >
                 <option value="">-- Selecciona el equipo --</option>
@@ -635,7 +682,7 @@ export const RoutinesPage: React.FC<RoutinesPageProps> = ({ onStartWorkout }) =>
               disabled={submitting}
               className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
             >
-              {submitting ? 'Guardando...' : 'Crear Rutina Completa'}
+              {submitting ? 'Guardando...' : editingRoutine ? 'Guardar Cambios' : 'Crear Rutina Completa'}
             </button>
           </div>
         </form>

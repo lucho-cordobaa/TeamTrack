@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Query,
   Patch,
   Post,
   UseGuards,
@@ -33,6 +34,11 @@ export class SessionsController {
   @Get('active')
   getActive(@CurrentUser('id') athleteId: number) {
     return this.sessionsService.getActive(athleteId);
+  }
+
+  @Get('history')
+  getHistory(@CurrentUser() user: any, @Query('athleteId') athleteId?: string) {
+    return this.sessionsService.getHistory(user, athleteId ? Number(athleteId) : undefined);
   }
 
   @Roles(Rol.ATLETA)

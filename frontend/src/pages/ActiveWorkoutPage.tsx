@@ -228,7 +228,7 @@ export const ActiveWorkoutPage: React.FC<ActiveWorkoutPageProps> = ({
           <CheckCircle2 size={44} />
         </div>
         <div>
-          <h2 className="text-2xl font-black text-white">¡Entrenamiento Completado!</h2>
+          <h2 className="text-2xl font-black text-white">Entrenamiento guardado</h2>
           <p className="text-slate-400 text-sm mt-1">
             {finishSuccess.message} Se guardaron {finishSuccess.series_guardadas} series.
           </p>

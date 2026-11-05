@@ -163,4 +163,45 @@ export class ProgressService {
       })),
     };
   }
+
+  async getTeamExerciseRanking(
+    teamId: number,
+    exerciseId: number,
+    user: { id: number; rol: Rol; equipo_id?: number | null },
+  ) {
+    const team = await this.prisma.equipo.findUnique({
+      where: { id: teamId },
+      include: { atletas: { select: { id: true, nombre: true } } },
+    });
+    if (!team) throw new NotFoundException('Equipo no encontrado');
+    if (user.rol === Rol.ENTRENADOR && team.entrenador_id !== user.id) {
+      throw new ForbiddenException('No administras este equipo');
+    }
+    if (user.rol === Rol.ATLETA && (user.equipo_id !== teamId || !team.atletas.some((athlete) => athlete.id === user.id))) {
+      throw new ForbiddenException('No perteneces a este equipo');
+    }
+    const exercise = await this.prisma.ejercicio.findUnique({ where: { id: exerciseId }, select: { id: true, nombre: true } });
+    if (!exercise) throw new NotFoundException('Ejercicio no encontrado');
+
+    const records = await this.prisma.serieRealizada.findMany({
+      where: { ejercicio_id: exerciseId, usuario_id: { in: team.atletas.map((athlete) => athlete.id) } },
+      select: { usuario_id: true, peso_kg: true, repeticiones_realizadas: true, fecha: true },
+    });
+    const bestByAthlete = new Map<number, { peso_kg: number; repeticiones: number; fecha: Date }>();
+    for (const record of records) {
+      const candidate = { peso_kg: Number(record.peso_kg), repeticiones: record.repeticiones_realizadas, fecha: record.fecha };
+      const current = bestByAthlete.get(record.usuario_id);
+      if (!current || candidate.peso_kg > current.peso_kg || (candidate.peso_kg === current.peso_kg && candidate.repeticiones > current.repeticiones)) {
+        bestByAthlete.set(record.usuario_id, candidate);
+      }
+    }
+
+    const athletesById = new Map(team.atletas.map((athlete) => [athlete.id, athlete]));
+    const ranking = Array.from(bestByAthlete.entries())
+      .map(([athleteId, record]) => ({ atleta_id: athleteId, nombre: athletesById.get(athleteId)!.nombre, ...record }))
+      .sort((a, b) => b.peso_kg - a.peso_kg || b.repeticiones - a.repeticiones || a.nombre.localeCompare(b.nombre))
+      .map((entry, index) => ({ puesto: index + 1, ...entry }));
+
+    return { equipo_id: team.id, equipo_nombre: team.nombre, ejercicio: exercise, ranking };
+  }
 }

@@ -50,6 +50,7 @@ export const ProgressPage: React.FC = () => {
   const [progressData, setProgressData] = useState<any | null>(null);
   const [athleteSummary, setAthleteSummary] = useState<any | null>(null);
   const [teamProgress, setTeamProgress] = useState<any | null>(null);
+  const [teamRanking, setTeamRanking] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Inicializar listas
@@ -119,6 +120,21 @@ export const ProgressPage: React.FC = () => {
       fetchProgress();
     }
   }, [selectedAthleteId, selectedExerciseId]);
+
+  const rankingTeamId = isCoach ? selectedTeamId : (user?.equipo_id ?? '');
+  useEffect(() => {
+    if (!rankingTeamId || !selectedExerciseId) {
+      setTeamRanking(null);
+      return;
+    }
+    setTeamRanking(null);
+    api.get(`/progress/team/${rankingTeamId}/exercise/${selectedExerciseId}/ranking`)
+      .then((response) => setTeamRanking(response.data))
+      .catch((err) => {
+        console.error('Error cargando ranking del equipo:', err);
+        setTeamRanking(null);
+      });
+  }, [rankingTeamId, selectedExerciseId]);
 
   // Configuración de Chart.js
   const chartLabels = progressData?.puntos_progreso?.map((p: PuntoProgreso) => p.fecha) || [];
@@ -360,6 +376,38 @@ export const ProgressPage: React.FC = () => {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {teamRanking && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-white">Ranking de PR — {teamRanking.ejercicio.nombre}</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {teamRanking.equipo_nombre}: se ordena por mayor peso y, en caso de empate, por más repeticiones en esa serie.
+            </p>
+          </div>
+          {teamRanking.ranking.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-800 p-5 text-center text-sm text-slate-500">Todavía no hay registros para este ejercicio en el equipo.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-950 text-xs uppercase text-slate-500">
+                  <tr><th className="px-4 py-3">Puesto</th><th className="px-4 py-3">Atleta</th><th className="px-4 py-3">PR</th><th className="px-4 py-3">Repeticiones</th></tr>
+                </thead>
+                <tbody>
+                  {teamRanking.ranking.map((entry: any) => (
+                    <tr key={entry.atleta_id} className="border-t border-slate-800 text-slate-200">
+                      <td className="px-4 py-3 font-bold text-emerald-400">{entry.puesto}°</td>
+                      <td className="px-4 py-3 font-semibold">{entry.nombre}</td>
+                      <td className="px-4 py-3">{entry.peso_kg} kg</td>
+                      <td className="px-4 py-3">{entry.repeticiones}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

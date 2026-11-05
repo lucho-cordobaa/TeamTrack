@@ -42,4 +42,13 @@ export class ProgressController {
   ) {
     return this.progressService.getTeamProgress(teamId, coachId);
   }
+
+  @Get('team/:teamId/exercise/:exerciseId/ranking')
+  getTeamExerciseRanking(
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Param('exerciseId', ParseIntPipe) exerciseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.progressService.getTeamExerciseRanking(teamId, exerciseId, user);
+  }
 }

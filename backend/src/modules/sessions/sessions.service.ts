@@ -12,6 +12,8 @@ import { StartSessionDto } from './dto/start-session.dto';
 import { UpdateSetDto } from './dto/update-set.dto';
 import { FinishSessionDto } from './dto/finish-session.dto';
 import { randomUUID } from 'crypto';
+import { coachManagesAthlete } from '../../common/utils/athlete-access';
+import { Rol } from '@prisma/client';
 
 @Injectable()
 export class SessionsService {
@@ -134,20 +136,14 @@ export class SessionsService {
     );
 
     if (serieIndex === -1) {
-      session.ejercicios[ejIndex].series.push({
-        numero: dto.numero_serie,
-        peso_kg: dto.peso_kg,
-        repeticiones_realizadas: dto.repeticiones_realizadas,
-        completada: dto.completada,
-      });
-    } else {
-      session.ejercicios[ejIndex].series[serieIndex] = {
-        numero: dto.numero_serie,
-        peso_kg: dto.peso_kg,
-        repeticiones_realizadas: dto.repeticiones_realizadas,
-        completada: dto.completada,
-      };
+      throw new BadRequestException('La serie no pertenece a esta sesión');
     }
+    session.ejercicios[ejIndex].series[serieIndex] = {
+      numero: dto.numero_serie,
+      peso_kg: dto.peso_kg,
+      repeticiones_realizadas: dto.repeticiones_realizadas,
+      completada: dto.completada,
+    };
 
     const updated = await this.firebaseService.updateSession(sessionId, {
       ejercicios: session.ejercicios,
@@ -169,6 +165,12 @@ export class SessionsService {
       throw new BadRequestException('Esta sesión ya se encuentra finalizada');
     }
 
+    const alreadySaved = await this.prisma.entrenamientoRealizado.findUnique({ where: { id: sessionId } });
+    if (alreadySaved) {
+      await this.firebaseService.updateSession(sessionId, { estado: 'finalizada', fecha_fin: alreadySaved.fecha_fin.toISOString() });
+      return { message: 'Sesión finalizada con éxito.', series_guardadas: await this.prisma.serieRealizada.count({ where: { entrenamiento_id: sessionId } }), sessionId, duracion_segundos: alreadySaved.duracion_segundos };
+    }
+
     // Recopilar series completadas
     const seriesToPersist: {
       usuario_id: number;
@@ -181,10 +183,15 @@ export class SessionsService {
     }[] = [];
 
     const now = new Date();
+    const startedAt = new Date(session.fecha_inicio);
+    const durationSeconds = Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000));
 
     if (dto?.series_completadas && dto.series_completadas.length > 0) {
       for (const s of dto.series_completadas) {
         if (s.completada) {
+          const exercise = session.ejercicios.find((item) => item.ejercicio_id === s.ejercicio_id);
+          const set = exercise?.series.find((item) => item.numero === s.numero_serie);
+          if (!exercise || !set) throw new BadRequestException('La serie indicada no pertenece a esta sesión');
           seriesToPersist.push({
             usuario_id: athleteId,
             ejercicio_id: s.ejercicio_id,
@@ -216,9 +223,20 @@ export class SessionsService {
 
     // Persistir en MySQL dentro de una transacción Prisma
     await this.prisma.$transaction(async (tx) => {
+      await tx.entrenamientoRealizado.create({
+        data: {
+          id: sessionId,
+          usuario_id: athleteId,
+          rutina_id: session.rutina_id,
+          rutina_nombre: session.rutina_nombre,
+          fecha_inicio: startedAt,
+          fecha_fin: now,
+          duracion_segundos: durationSeconds,
+        },
+      });
       if (seriesToPersist.length > 0) {
         await tx.serieRealizada.createMany({
-          data: seriesToPersist,
+          data: seriesToPersist.map((serie) => ({ ...serie, entrenamiento_id: sessionId })),
         });
       }
 
@@ -256,7 +274,28 @@ export class SessionsService {
       message: 'Sesión finalizada con éxito.',
       series_guardadas: seriesToPersist.length,
       sessionId,
+      duracion_segundos: durationSeconds,
     };
+  }
+
+  async getHistory(user: { id: number; rol: Rol }, requestedAthleteId?: number) {
+    const athleteId = requestedAthleteId ?? user.id;
+    if (user.rol === Rol.ATLETA && athleteId !== user.id) {
+      throw new ForbiddenException('No tienes acceso al historial de este atleta');
+    }
+    if (user.rol === Rol.ENTRENADOR) {
+      const athlete = await this.prisma.usuario.findUnique({ where: { id: athleteId }, include: { equipo: true } });
+      if (!athlete) throw new NotFoundException('Atleta no encontrado');
+      if (!coachManagesAthlete(user.id, athlete)) throw new ForbiddenException('No administras a este atleta');
+    }
+    return this.prisma.entrenamientoRealizado.findMany({
+      where: { usuario_id: athleteId },
+      orderBy: { fecha_inicio: 'desc' },
+      include: {
+        rutina: { select: { id: true, nombre: true } },
+        series: { include: { ejercicio: { select: { id: true, nombre: true, grupo_muscular: true } } }, orderBy: [{ ejercicio_id: 'asc' }, { numero_serie: 'asc' }] },
+      },
+    });
   }
 
   // Monitoreo en tiempo real de sesiones activas del equipo para el entrenador

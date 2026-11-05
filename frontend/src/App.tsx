@@ -11,6 +11,7 @@ import { RoutinesPage } from './pages/RoutinesPage';
 import { AttendancePage } from './pages/AttendancePage';
 import { ActiveWorkoutPage } from './pages/ActiveWorkoutPage';
 import { ProgressPage } from './pages/ProgressPage';
+import { WorkoutHistoryPage } from './pages/WorkoutHistoryPage';
 
 export const App: React.FC = () => {
   const { user, token, isLoading, isCoach } = useAuth();
@@ -47,6 +48,8 @@ export const App: React.FC = () => {
         return 'Sesión de Entrenamiento Activa';
       case 'progress':
         return 'Historial de Cargas & Progreso';
+      case 'history':
+        return 'Historial de Entrenamientos';
       default:
         return 'TeamTrack';
     }
@@ -114,6 +117,7 @@ export const App: React.FC = () => {
             />
           )}
           {currentTab === 'progress' && <ProgressPage />}
+          {currentTab === 'history' && <WorkoutHistoryPage />}
         </main>
       </div>
     </div>

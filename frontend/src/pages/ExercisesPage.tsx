@@ -424,14 +424,17 @@ export const ExercisesPage: React.FC = () => {
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
               Grupo Muscular Principal
             </label>
-            <input
-              type="text"
+            <select
               required
               value={newGrupo}
               onChange={(e) => setNewGrupo(e.target.value)}
-              placeholder="Ej: Tríceps, Espalda, Piernas, Pecho..."
               className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none"
-            />
+            >
+              <option value="" disabled>Selecciona un grupo muscular</option>
+              {Array.from(new Set([...muscleGroups, ...(newGrupo ? [newGrupo] : [])]))
+                .sort((a, b) => a.localeCompare(b))
+                .map((group) => <option key={group} value={group}>{group}</option>)}
+            </select>
           </div>
 
           <div>

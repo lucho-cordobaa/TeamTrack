@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   PlayCircle,
   TrendingUp,
+  History,
   FileText,
   LogOut,
   X,
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'exercises', label: 'Catálogo Ejercicios', icon: Dumbbell },
     { id: 'routines', label: 'Constructor Rutinas', icon: FileText },
     { id: 'attendance', label: 'Control Asistencia', icon: CalendarCheck },
+    { id: 'history', label: 'Historial de Entrenamientos', icon: History },
     { id: 'progress', label: 'Progreso & Métricas', icon: TrendingUp },
   ];
 
@@ -52,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'workout', label: 'Entrenar Ahora', icon: PlayCircle, highlight: true },
     { id: 'attendance', label: 'Mi Asistencia', icon: CalendarCheck },
     { id: 'progress', label: 'Mi Progreso', icon: TrendingUp },
+    { id: 'history', label: 'Historial de Entrenamientos', icon: History },
     { id: 'exercises', label: 'Catálogo Ejercicios', icon: Dumbbell },
   ];
 
